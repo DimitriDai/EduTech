@@ -6,6 +6,9 @@ cd C:\Users\24340\Desktop\EduTech
 .\scripts\dev_start.ps1
 
 ## Open all services
+后端：http://127.0.0.1:9000/vocab/docs
+
+
 ### VOCAB：
 浏览器前端打开：
 http://127.0.0.1:8000/static/index.html
