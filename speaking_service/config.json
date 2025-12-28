@@ -1,0 +1,11 @@
+{
+  "module": "IELTS_Speaking",
+  "exam": "雅思",
+  "default_style": "地道自然",
+  "runs_dir": "runs",
+  "naming": {
+    "image_prefix": "雅思话题",
+    "image_digits": 4,
+    "prefill_pattern": "{exam}_口语话题_预填_{rand4}.txt"
+  }
+}

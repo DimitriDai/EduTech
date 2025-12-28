@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Speaking Batch</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; }
+    body { margin: 20px; }
+    h1 { margin: 0 0 12px 0; font-size: 20px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 12px 0; }
+    .card h2 { margin: 0 0 10px 0; font-size: 16px; }
+    label { display: inline-flex; gap: 8px; align-items: center; }
+    input[type="text"], select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px; }
+    input[type="file"] { max-width: 520px; }
+    button { padding: 8px 12px; border: 1px solid #333; background: #fff; border-radius: 10px; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .muted { color: #666; font-size: 12px; }
+    .warn { color: #b45309; }
+    .ok { color: #065f46; }
+    .err { color: #b91c1c; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    textarea { width: 100%; min-height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .links a { display: inline-block; margin: 6px 10px 0 0; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 860px) { .grid { grid-template-columns: 1.2fr .8fr; } }
+    .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; }
+    .divider { height:1px; background:#eee; margin:10px 0; }
+  </style>
+</head>
+
+<body>
+  <h1>口语批量处理</h1>
+  <div class="muted">后端：<span class="mono" id="apiBaseLabel">http://127.0.0.1:8001</span></div>
+
+  <div class="card">
+    <h2>1. 上传截图</h2>
+    <div class="row">
+      <label>选择截图（可多选）
+        <input id="files" type="file" multiple accept=".png,.jpg,.jpeg,.webp" />
+      </label>
+    </div>
+    <div class="muted">流程：init → upload_images → rename → OCR → parse → generate → export → download</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>2. 导出模式</h2>
+
+      <div class="row" style="margin-bottom:8px;">
+        <label><input type="radio" name="mode" value="A" checked /> A 纯问题版（不显示 outline / answer）</label>
+      </div>
+
+      <div class="row" style="margin-bottom:8px;">
+        <label><input type="radio" name="mode" value="B" /> B 答案版（可选展示内容）</label>
+      </div>
+
+      <div id="bOptions" style="margin-left:20px; display:none;">
+        <div class="row">
+          <label><input type="radio" name="bShow" value="outline" checked /> 仅 outline</label>
+          <label><input type="radio" name="bShow" value="answer" /> 仅 sample answer</label>
+          <label><input type="radio" name="bShow" value="both" /> outline + sample answer</label>
+        </div>
+      </div>
+
+      <div class="row" style="margin:12px 0 8px 0;">
+        <label id="modeCWrap"><input id="modeC" type="radio" name="mode" value="C" /> C 截图版</label>
+        <span id="cFlag" class="pill muted" style="display:none;"></span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row" style="margin-top:10px;">
+        <label>分页
+          <select id="pageBreak">
+            <option value="part" selected>part</option>
+            <option value="segment">segment</option>
+            <option value="none">none</option>
+          </select>
+        </label>
+
+        <label>prefix（OCR 用）
+          <input id="prefix" type="text" value="雅思话题" />
+        </label>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <label>band
+          <input id="band" type="text" value="6.5-7" />
+        </label>
+        <label>role
+          <input id="role" type="text" value="High School Student (Hangzhou, China)" />
+        </label>
+        <label>style
+          <input id="style" type="text" value="Natural & Native" />
+        </label>
+        <label class="muted">
+          <input id="mergeAll" type="checkbox" />
+          merge_all
+        </label>
+      </div>
+
+      <!-- Teacher settings（你已经加过这段，这里保留） -->
+      <details class="teacher-settings" style="margin-top:10px;">
+        <summary class="muted">Teacher settings</summary>
+
+        <div class="row" style="margin-top:8px;">
+          <label>
+            <input type="checkbox" id="forceRegen" />
+            强制重生成（忽略缓存）
+          </label>
+
+          <label class="muted">
+            <input type="checkbox" id="onlyThisRun" disabled />
+            仅本次生效（不写入全局缓存）
+          </label>
+        </div>
+
+        <div class="muted" style="margin-top:6px; line-height:1.4;">
+          勾选“强制重生成”才会重新调用模型；<br/>
+          勾选“仅本次生效”不会污染全局答案库。
+        </div>
+      </details>
+
+      <div class="row" style="margin-top:12px;">
+        <button id="runBtn">Run</button>
+        <button id="resetBtn" type="button">Reset</button>
+        <span class="muted">当前 run_id：<span id="runId" class="mono">-</span></span>
+      </div>
+
+      <div id="downloadBox" class="links" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>3. 状态日志</h2>
+      <div class="muted">出错时复制整段日志给我就行。</div>
+      <textarea id="log" readonly></textarea>
+    </div>
+  </div>
+
+<script>
+  // =========================
+  // 配置：API Base（你现在是 8001）
+  // =========================
+  const API_BASE = "http://127.0.0.1:8001";
+  document.getElementById("apiBaseLabel").textContent = API_BASE;
+
+  // =========================
+  // 小工具
+  // =========================
+  const $ = (id) => document.getElementById(id);
+  const logEl = $("log");
+
+  // ✅ 教师设置（缓存控制）
+  const forceRegenEl = $("forceRegen");
+  const onlyThisRunEl = $("onlyThisRun");
+
+  // 保险：避免元素没渲染导致 null 报错
+  if (forceRegenEl && onlyThisRunEl) {
+    forceRegenEl.addEventListener("change", () => {
+      if (!forceRegenEl.checked) {
+        onlyThisRunEl.checked = false;
+        onlyThisRunEl.disabled = true;
+      } else {
+        onlyThisRunEl.disabled = false;
+      }
+    });
+  }
+
+  function logLine(msg, level="INFO") {
+    const ts = new Date().toISOString().slice(11,19);
+    logEl.value += `${ts} [${level}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setBusy(b) {
+    $("runBtn").disabled = b;
+    $("resetBtn").disabled = b;
+    $("files").disabled = b;
+    document.querySelectorAll("input[name='mode']").forEach(r => {
+      if (r.value === "C" && $("modeCWrap").dataset.disabled === "1") r.disabled = true;
+      else r.disabled = b;
+    });
+    document.querySelectorAll("input[name='bShow']").forEach(r => r.disabled = b);
+    $("pageBreak").disabled = b;
+    $("prefix").disabled = b;
+    $("band").disabled = b;
+    $("role").disabled = b;
+    $("style").disabled = b;
+    $("mergeAll").disabled = b;
+
+    // ✅ Teacher settings 也一并锁定，防止跑一半你误点
+    if (forceRegenEl) forceRegenEl.disabled = b;
+    if (onlyThisRunEl) onlyThisRunEl.disabled = b || !(forceRegenEl && forceRegenEl.checked);
+  }
+
+  async function safeJson(resp) {
+    const text = await resp.text();
+    try { return JSON.parse(text); } catch { return { raw: text }; }
+  }
+
+  async function apiJson(path, opts={}) {
+    const url = API_BASE + path;
+    const resp = await fetch(url, opts);
+    const data = await safeJson(resp);
+    if (!resp.ok) {
+      const detail = (data && (data.detail || data.raw)) ? (data.detail || data.raw) : `HTTP ${resp.status}`;
+      throw new Error(`${path} -> ${resp.status}: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`);
+    }
+    return data;
+  }
+
+  async function apiPostJson(path, bodyObj) {
+    return apiJson(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyObj || {})
+    });
+  }
+
+  async function apiPostForm(path, formData) {
+    return apiJson(path, { method: "POST", body: formData });
+  }
+
+  function getMode() { return document.querySelector("input[name='mode']:checked")?.value || "A"; }
+  function getBShow() { return document.querySelector("input[name='bShow']:checked")?.value || "outline"; }
+
+  function refreshBOptions() {
+    $("bOptions").style.display = (getMode() === "B") ? "block" : "none";
+  }
+  document.querySelectorAll("input[name='mode']").forEach(r => r.addEventListener("change", refreshBOptions));
+  refreshBOptions();
+
+  function clearDownloads() { $("downloadBox").innerHTML = ""; }
+
+  function renderDownloads(runId, files) {
+    clearDownloads();
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      $("downloadBox").innerHTML = `<div class="muted warn">导出完成，但 files 为空（通常是 segments 为空/没有内容可导出）。</div>`;
+      return;
+    }
+    const wrap = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "ok";
+    title.textContent = "下载：";
+    wrap.appendChild(title);
+
+    files.forEach((fn) => {
+      const a = document.createElement("a");
+      a.href = `${API_BASE}/speaking/run/download?run_id=${encodeURIComponent(runId)}&filename=${encodeURIComponent(fn)}`;
+      a.textContent = fn;
+      a.target = "_blank";
+      wrap.appendChild(a);
+    });
+
+    $("downloadBox").appendChild(wrap);
+  }
+
+  function computeShowFlags(mode) {
+    if (mode === "A") return { show_outline: false, show_answers: false };
+    if (mode === "B") {
+      const b = getBShow();
+      if (b === "outline") return { show_outline: true, show_answers: false };
+      if (b === "answer") return { show_outline: false, show_answers: true };
+      return { show_outline: true, show_answers: true };
+    }
+    return { show_outline: true, show_answers: true };
+  }
+
+  // =========================
+  // Feature Flag：是否允许 C
+  // =========================
+  async function loadFrontendConfig() {
+    try {
+      const cfg = await apiJson("/speaking/frontend/config", { method: "GET" });
+      const enabled = !!cfg.enable_export_c;
+
+      if (!enabled) {
+        $("modeCWrap").dataset.disabled = "1";
+        $("modeCWrap").style.opacity = "0.5";
+        $("modeC").disabled = true;
+        $("cFlag").style.display = "inline-block";
+        $("cFlag").textContent = "C 已关闭";
+        if (getMode() === "C") {
+          document.querySelector("input[name='mode'][value='A']").checked = true;
+          refreshBOptions();
+        }
+      } else {
+        $("modeCWrap").dataset.disabled = "0";
+        $("modeC").disabled = false;
+        $("cFlag").style.display = "inline-block";
+        $("cFlag").textContent = "C 可用";
+      }
+
+      logLine(`frontend/config loaded: enable_export_c=${enabled}`, "OK");
+    } catch (e) {
+      $("cFlag").style.display = "inline-block";
+      $("cFlag").textContent = "config 不可用";
+      logLine(`frontend/config failed: ${e.message}`, "WARN");
+    }
+  }
+
+  // =========================
+  // 串联流程
+  // =========================
+  async function runPipeline() {
+    clearDownloads();
+
+    const files = $("files").files;
+    if (!files || files.length === 0) {
+      logLine("请先选择截图文件", "ERR");
+      return;
+    }
+
+    const mode = getMode();
+    if (mode === "C" && $("modeCWrap").dataset.disabled === "1") {
+      logLine("C 已被后台禁用，请选择 A 或 B", "ERR");
+      return;
+    }
+
+    const prefix = $("prefix").value.trim() || "batch";
+    const page_break = $("pageBreak").value;
+    const band = $("band").value.trim() || "6.5-7";
+    const role = $("role").value.trim() || "High School Student (Hangzhou, China)";
+    const style = $("style").value.trim() || "Natural & Native";
+    const merge_all = $("mergeAll").checked;
+
+    // ✅ 教师缓存控制
+    const force_regen = !!(forceRegenEl && forceRegenEl.checked);
+    const only_for_this_run = !!(onlyThisRunEl && onlyThisRunEl.checked);
+
+    setBusy(true);
+    logEl.value = "";
+    logLine(`Start pipeline: mode=${mode}, files=${files.length}`, "INFO");
+
+    let runId = null;
+
+    try {
+      // 1) init
+      logLine("1) init run ...", "INFO");
+      const initResp = await apiPostJson("/speaking/run/init", {});
+      runId = initResp.run_id || initResp.runId || initResp.id;
+      if (!runId) throw new Error("init did not return run_id");
+      $("runId").textContent = runId;
+      logLine(`   run_id=${runId}`, "OK");
+
+      // 2) upload_images
+      logLine("2) upload_images ...", "INFO");
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f, f.name);
+      const upResp = await apiPostForm(`/speaking/run/upload_images?run_id=${encodeURIComponent(runId)}`, fd);
+      logLine(`   saved=${upResp.saved ?? "?"}, files=${(upResp.files && upResp.files.length) || "?"}`, "OK");
+
+      // 3) rename
+      logLine("3) rename ...", "INFO");
+      await apiPostJson(`/speaking/run/rename?run_id=${encodeURIComponent(runId)}`, {});
+      logLine("   rename done", "OK");
+
+      // 4) OCR
+      logLine("4) stage1 OCR ...", "INFO");
+      const ocrBody = {
+        run_id: runId,
+        prefix,
+        merge_all,
+        band,
+        role,
+        style
+      };
+      await apiPostJson("/speaking/stage1/ocr", ocrBody);
+      logLine(`   ocr ok`, "OK");
+
+      // 5) parse
+      logLine("5) stage2 parse ...", "INFO");
+      await apiPostJson(`/speaking/stage2/parse?run_id=${encodeURIComponent(runId)}`, {});
+      logLine(`   parse ok`, "OK");
+
+      // 6) generate
+      logLine("6) generate_answers ...", "INFO");
+      // ✅ 如果后端 generate 接口支持 body，就走 body（用于传缓存控制）；不支持则后端会 422，你把日志贴我我再对齐
+      const genParams = new URLSearchParams({
+        run_id: runId,
+        force_regen: force_regen ? "true" : "false",
+        only_for_this_run: only_for_this_run ? "true" : "false",
+      });
+      await apiPostJson(
+        `/speaking/run/generate_answers?${genParams.toString()}`,
+        {} // body 不用传这些开关，传空即可
+      );
+      logLine(`   generate ok`, "OK");
+
+      // 7) export
+      logLine("7) export ...", "INFO");
+      const flags = computeShowFlags(mode);
+
+      const exportReq = {
+        run_id: runId,
+        page_break,
+        show_outline: flags.show_outline,
+        show_answers: flags.show_answers,
+        merge_all: merge_all,
+        band: band,
+        role: role,
+        style: style,
+
+        // ✅ 同样把缓存控制透传（你后端如果忽略也没事；严格校验才会 422）
+        force_regen,
+        only_for_this_run
+      };
+
+      let exportPath = "/speaking/export/docx";
+      if (mode === "A") exportPath = "/speaking/export/docx_a";
+      if (mode === "C") exportPath = "/speaking/export/docx_c";
+
+      const expResp = await apiPostJson(exportPath, exportReq);
+      logLine(`   export ok`, "OK");
+
+      // 8) download links
+      renderDownloads(runId, expResp.files || []);
+      logLine("Done ✅", "OK");
+    } catch (e) {
+      logLine(e.message || String(e), "ERR");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function resetAll() {
+    $("files").value = "";
+    $("runId").textContent = "-";
+    clearDownloads();
+    logEl.value = "";
+    document.querySelector("input[name='mode'][value='A']").checked = true;
+    document.querySelector("input[name='bShow'][value='outline']").checked = true;
+    refreshBOptions();
+    if (forceRegenEl) forceRegenEl.checked = false;
+    if (onlyThisRunEl) { onlyThisRunEl.checked = false; onlyThisRunEl.disabled = true; }
+    logLine("Reset", "INFO");
+  }
+
+  $("runBtn").addEventListener("click", runPipeline);
+  $("resetBtn").addEventListener("click", resetAll);
+
+  loadFrontendConfig();
+</script>
+</body>
+</html>
