@@ -1,120 +1,102 @@
 ############################################
-# 0) OS / IDE
+# 0) 默认全忽略（白名单模式）
 ############################################
-.DS_Store
-Thumbs.db
-desktop.ini
-
-.vscode/
-.idea/
-*.swp
+*
+!.gitignore
+!.gitattributes
+!README.md
+!LICENSE
 
 ############################################
-# 1) Python 通用
+# 1) 只允许三个模块目录进入版本库
 ############################################
-__pycache__/
-*.py[cod]
-*.pyd
+!speaking_service/
+!vocab_service/
+!streamlit_wrt_app/
 
-.venv/
-venv/
-env/
-ENV/
-
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# 允许目录结构继续向下被规则控制
+!speaking_service/**
+!vocab_service/**
+!streamlit_wrt_app/**
 
 ############################################
-# 2) Secrets / Keys（任何模块都通用）
+# 2) 通用：Python / Node / 系统垃圾 / IDE
 ############################################
-**/secrets.toml
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/.venv/
+**/venv/
+**/ENV/
 **/.env
 **/.env.*
-**/*secret*
-**/*apikey*
-**/*api_key*
-**/*token*
-**/*credential*
-**/*.pem
-**/*.key
+**/*.log
+
+# macOS / Windows
+**/.DS_Store
+**/Thumbs.db
+**/desktop.ini
+**/*.tmp
+**/*.bak
+**/*.swp
+**/*.swo
+
+# IDE
+**/.vscode/
+**/.idea/
 
 ############################################
-# 3) 通用“产物/缓存/大文件”
+# 3) streamlit_wrt_app：强制忽略敏感和运行产物
 ############################################
-*.log
-
-# 如果你有大量图片/音频/视频产物，不要进 git
-*.mp3
-*.wav
-*.m4a
-*.mp4
-*.mov
-
-# 常见导出产物（如果你有“必须提交”的模板，再单独放到 templates/ 并做例外）
-*.docx
-*.xlsx
-*.pptx
-*.pdf
-
-############################################
-# 4) streamlit_wrt_app
-############################################
-# 只忽略密钥；不要整目录忽略 .streamlit（以后你可能会放 config.toml）
 streamlit_wrt_app/.streamlit/secrets.toml
+streamlit_wrt_app/.streamlit/*.toml
+
+# 运行/输出
+streamlit_wrt_app/reports/
+streamlit_wrt_app/out/
+streamlit_wrt_app/output/
+streamlit_wrt_app/tmp/
+streamlit_wrt_app/logs/
+
+# 你明确说的旧文件（避免误提交）
+streamlit_wrt_app/streamlit_wrt_app.py
+streamlit_wrt_app/streamlit_wrt_app2.py
+streamlit_wrt_app/app2.py
+streamlit_wrt_app/grader2.py
+
+# 中文“新建文本文档”之类
+streamlit_wrt_app/*.txt
 
 ############################################
-# 5) speaking_service
+# 4) speaking_service：忽略 runs，但保留“代码资产”
 ############################################
-# runs 通常是运行产物：截图、识别文本、prefill 临时文件、answers 导出等
+# runs 基本都是运行产物（截图、答案、prefill、临时json）
 speaking_service/runs/
-speaking_service/out/
-speaking_service/storage/
-speaking_service/tmp/
-speaking_service/.cache/
+speaking_service/runs/**
 
-# 但你强调 global_cache 是核心资产：明确保留（即便上面有更宽的规则也要保住）
+# 如果你有真正“必须保留到仓库的全局缓存代码/结构”，用 cache_global 目录名更清晰：
+# （注意：真正的“缓存内容”建议不上 git；这里只是允许目录结构进仓库，避免你误 ignore 掉）
 !speaking_service/cache_global/
 !speaking_service/cache_global/**
 
-# 兜底：如果你把 global_cache 放在 runs/_global_cache（你之前出现过这个路径），也强制保留
-!speaking_service/runs/_global_cache/
-!speaking_service/runs/_global_cache/**
-
 ############################################
-# 6) vocab_service
+# 5) vocab_service：忽略运行产物/缓存/音频等大文件
 ############################################
-# 这些一般是运行产物/上传文件/音频大目录：不进 git
+# 运行产物
+vocab_service/storage/
 vocab_service/storage/**
 
-# 但是：你核心资产必须保留 —— 精确反忽略（保留并可被 git 跟踪）
-!vocab_service/storage/global_cache.json
-!vocab_service/storage/global_cache.jsonl
-!vocab_service/storage/global_cache.bootstrap.json
-!vocab_service/storage/global_cache.boostrap.json
-!vocab_service/storage/uploaded_vocab_cache.json
-!vocab_service/storage/uploaded_vocab_cache.jsonl
-!vocab_service/storage/uploaded_vocab_cache*.json
-!vocab_service/storage/global_cache*.json
-!vocab_service/storage/*cache*.json
-!vocab_service/storage/*cache*.jsonl
+# 常见输出目录（如果你有）
+vocab_service/out/
+vocab_service/out/**
+vocab_service/output/
+vocab_service/output/**
 
-# 仍然明确排除体积大、可再生成的子目录（即便被上面的 *cache* 兜底误命中也不会进）
-vocab_service/storage/audio_cache/
-vocab_service/storage/run_cache/
-vocab_service/storage/out/
-vocab_service/storage/practice_audio/
-vocab_service/storage/uploaded_vocab/
-
-############################################
-# 7) Root-level safety: only allow core modules
-############################################
-
-# 先忽略所有根目录下的内容
-/*
-
-# 但放行我们明确允许的
-!/.gitignore
-!/speaking_service/
-!/vocab_service/
-!/streamlit_wrt_app/
+# 如果你把 global_cache / uploaded_vocab_cache 放在 storage 里，它会被上面规则忽略；
+# 正确做法是：代码里读取的“持久化目录”由环境变量决定，不靠 git。
