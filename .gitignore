@@ -85,6 +85,13 @@ speaking_service/runs/**
 !speaking_service/cache_global/
 !speaking_service/cache_global/**
 
+# speaking_service global cache (core asset, but NOT tracked by git)
+speaking_service/cache_global/*.jsonl
+speaking_service/cache_global/*.json
+speaking_service/cache_global/*.txt
+# keep the folder
+!speaking_service/cache_global/.gitkeep
+
 ############################################
 # 5) vocab_service：忽略运行产物/缓存/音频等大文件
 ############################################
