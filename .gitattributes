@@ -1,0 +1,24 @@
+# 统一：仓库里用 LF；工作区按平台需要检出
+* text=auto eol=lf
+
+# Windows 脚本用 CRLF（避免 PowerShell/批处理偶发问题）
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 明确文本类型（可选，但更稳）
+*.py   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# 二进制文件别让 Git 试图改行尾
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.wav  binary
+*.mp3  binary
+*.pdf  binary
+*.docx binary
+*.xlsx binary
