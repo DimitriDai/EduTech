@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vocab Service Frontend (Local)</title>
+  <style>
+    :root { --bd:#e5e7eb; --txt:#111827; --muted:#6b7280; --ok:#16a34a; --bad:#dc2626; --bg:#ffffff; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+           background: var(--bg); color: var(--txt); margin: 0; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    h2 { font-size: 15px; margin: 18px 0 8px; }
+    .card { border: 1px solid var(--bd); border-radius: 10px; padding: 12px; background: #fff; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .col { flex: 1 1 320px; min-width: 280px; }
+    textarea { width: 100%; min-height: 160px; resize: vertical; padding: 10px; border: 1px solid var(--bd); border-radius: 10px; outline: none; }
+    input[type="text"] { width: 100%; padding: 9px 10px; border: 1px solid var(--bd); border-radius: 10px; outline: none; }
+    select { padding: 8px 10px; border: 1px solid var(--bd); border-radius: 10px; background: #fff; }
+    .btn { border: 1px solid var(--bd); border-radius: 10px; padding: 9px 12px; background: #fff; cursor: pointer; }
+    .btn.primary { background: #111827; color: #fff; border-color: #111827; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .status .ok { color: var(--ok); font-weight: 700; }
+    .status .bad { color: var(--bad); font-weight: 700; }
+    .chips { display:flex; gap:8px; flex-wrap: wrap; margin-top: 8px; }
+    .chip { border: 1px solid var(--bd); border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 12px; background:#fff; }
+    .chip.active { background:#111827; color:#fff; border-color:#111827; }
+    .dlgrid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+    .dlitem { display:flex; align-items:center; gap:10px; padding: 8px; border:1px solid var(--bd); border-radius: 10px; }
+    .dlitem code { font-size: 12px; color: #374151; }
+    .dlitem .grow { flex: 1; }
+    .log { width:100%; min-height: 160px; padding:10px; border:1px solid var(--bd); border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; white-space: pre-wrap; background:#fafafa; }
+    .hint { padding: 8px; border: 1px dashed var(--bd); border-radius: 10px; color: var(--muted); font-size: 12px; }
+    .divider { height:1px; background: var(--bd); margin: 14px 0; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>词汇整理一站式工具（本地）</h1>
+
+  <div class="card">
+    <div class="row">
+      <div class="col">
+        <div class="muted">Passage（可留空）</div>
+        <textarea id="passage" placeholder="可留空。建议粘贴阅读文章/段落。"></textarea>
+        <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+          <span class="muted">提取数量</span>
+          <select id="countSel">
+            <option value="10">10</option>
+            <option value="15" selected>15</option>
+            <option value="20">20</option>
+            <option value="25">25</option>
+          </select>
+          <span class="muted">（count）</span>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="muted">Scattered（可留空）</div>
+        <textarea id="scattered" placeholder="可留空。可输入零散单词/短语，逗号分隔。"></textarea>
+
+        <div class="divider"></div>
+
+        <div class="muted">自定义命名戳（不改后端，仅影响下载名/zip 内部路径）</div>
+        <input id="namePrefix" type="text" placeholder="例如：P3_The_Value_of_Literary_Prizes" />
+        <div class="muted" style="margin-top:6px;">建议只用字母/数字/下划线，空格会自动处理。</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="muted">字段预设（默认：含同义替换）</div>
+    <div class="chips" id="presetChips">
+      <button class="chip active" data-preset="synonyms">含同义替换</button>
+      <button class="chip" data-preset="all">全字段</button>
+      <button class="chip" data-preset="sent">含例句</button>
+      <button class="chip" data-preset="basic">基础中英释义</button>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center; margin-top: 10px;">
+      <button class="btn primary" id="btnRun">提取并生成</button>
+      <div class="muted">当前 run_id：<code id="runId">-</code></div>
+      <div class="status muted" id="runStatus"></div>
+    </div>
+  </div>
+
+  <h2>词汇笔记下载</h2>
+  <div class="card">
+    <div class="status muted" id="vocabNoteStatus">-</div>
+    <div id="vocabNoteArea" class="hint">尚未生成</div>
+    <div style="display:flex; gap:10px; margin-top:10px;">
+      <button class="btn" id="btnDownloadVocab" disabled>下载所选</button>
+    </div>
+  </div>
+
+  <h2>Practice 下载</h2>
+  <div class="card">
+    <div class="status muted" id="practiceStatus">-</div>
+    <div id="practiceArea" class="hint">尚未生成</div>
+    <div style="display:flex; gap:10px; margin-top:10px;">
+      <button class="btn" id="btnDownloadPractice" disabled>下载所选</button>
+    </div>
+  </div>
+
+  <h2>批改</h2>
+  <div class="card">
+    <div class="muted">仅接受本工具生成的“练习_例句_中译英”docx（或 zip）。</div>
+    <div style="display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap: wrap;">
+      <input type="file" id="gradingFile" accept=".docx,.zip" />
+      <button class="btn" id="btnGrade" disabled>上传并批改</button>
+      <div class="status muted" id="gradingMsg">-</div>
+    </div>
+  </div>
+
+  <h2>日志</h2>
+  <textarea class="log" id="log" readonly></textarea>
+</div>
+
+<script>
+  // =============== Config ===============
+  const API = "http://127.0.0.1:8000";
+
+  const ENDPOINTS = {
+    pipeline: API + "/v1/vocab/pipeline",
+    exportVocabNote: API + "/v1/export/vocab_note",
+
+    audioGenerateFromVocabNote: API + "/v1/audio/generate_from_vocab_note",
+    audioVocabNoteCompose: API + "/v1/audio/vocab_note",
+
+    practiceMaster: API + "/v1/practice/master",
+    practiceDocx: API + "/v1/practice/docx",
+    practiceComposeAudio: API + "/v1/audio/compose",
+
+    filesList: (runId, cat) => API + `/v1/files/out/${encodeURIComponent(runId)}/${encodeURIComponent(cat)}`,
+    downloadFile: (runId, cat, fn) => API + `/v1/files/out/${encodeURIComponent(runId)}/${encodeURIComponent(cat)}/${encodeURIComponent(fn)}`,
+    categoryZip: (runId, cat, namePrefix) => {
+      const base = API + `/v1/files/out/${encodeURIComponent(runId)}/${encodeURIComponent(cat)}/zip`;
+      const p = (namePrefix && namePrefix.trim()) ? `?name_prefix=${encodeURIComponent(namePrefix)}` : "";
+      return base + p;
+    },
+  };
+
+  const CATS = {
+    vocab_note: "vocab_note",
+    practice_docx: "practice_docx",
+    audio: "audio",
+  };
+
+  // =============== DOM ===============
+  const $ = (id) => document.getElementById(id);
+  const logEl = $("log");
+  const runIdEl = $("runId");
+  const runStatus = $("runStatus");
+
+  const vocabNoteArea = $("vocabNoteArea");
+  const vocabNoteStatus = $("vocabNoteStatus");
+  const btnDownloadVocab = $("btnDownloadVocab");
+
+  const practiceArea = $("practiceArea");
+  const practiceStatus = $("practiceStatus");
+  const btnDownloadPractice = $("btnDownloadPractice");
+
+  const btnRun = $("btnRun");
+
+  const gradingFileEl = $("gradingFile");
+  const btnGrade = $("btnGrade");
+  const gradingMsg = $("gradingMsg");
+
+  // =============== State ===============
+  let activePreset = "synonyms";
+  let currentRunId = "";
+  let lastExport = null;     // { excel, docx, ... }
+  let lastMaster = null;     // { output_xlsx, meta_json, ... }
+  let vocabExcelPath = "";   // exportResp.excel
+  let masterXlsxPath = "";   // masterResp.output_xlsx
+
+  // =============== Helpers ===============
+  function log(msg) {
+    const t = new Date().toISOString().slice(11, 19);
+    logEl.value += `[${t}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
+  }
+
+  function prefixOrEmpty() {
+    const raw = ($("namePrefix").value || "").trim();
+    if (!raw) return "";
+    // 轻度清洗：空格->下划线，非法字符->下划线
+    return raw
+      .replace(/\s+/g, "_")
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .slice(0, 50) + "__";
+  }
+
+  async function postJson(url, bodyObj) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify(bodyObj)
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`HTTP ${res.status}: ${txt}`);
+    }
+    return await res.json();
+  }
+
+  async function listOutFiles(runId, cat) {
+    const res = await fetch(ENDPOINTS.filesList(runId, cat));
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`list files failed HTTP ${res.status}: ${txt}`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.files) ? data.files : [];
+  }
+
+  async function downloadBlob(url, filename) {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`download failed HTTP ${res.status}: ${txt}`);
+    }
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    const u = URL.createObjectURL(blob);
+    a.href = u;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(u);
+  }
+
+  function renderMixedList(containerEl, items, groupKey) {
+    if (!items || items.length === 0) {
+      containerEl.innerHTML = `<div class="hint">未发现文件</div>`;
+      return;
+    }
+    const html = items.map(({cat, fn}) => {
+      const safe = escapeHtml(fn);
+      const id = `${groupKey}__${cat}__${fn}`.replace(/[^a-zA-Z0-9_\-:.]/g, "_");
+      return `
+        <div class="dlitem">
+          <input type="checkbox" checked data-group="${escapeHtml(groupKey)}" data-cat="${escapeHtml(cat)}" data-fn="${safe}" />
+          <div class="grow">
+            <div><code>${escapeHtml(cat)}</code> <span class="muted">${safe}</span></div>
+          </div>
+          <button class="btn" data-dl="1" data-cat="${escapeHtml(cat)}" data-fn="${safe}">下载</button>
+        </div>
+      `;
+    }).join("");
+    containerEl.innerHTML = `<div class="dlgrid">${html}</div>`;
+  }
+
+  function getChecked(groupKey) {
+    const nodes = document.querySelectorAll(`input[type="checkbox"][data-group="${groupKey}"]:checked`);
+    return Array.from(nodes).map(n => ({ cat: n.getAttribute("data-cat"), fn: n.getAttribute("data-fn") }));
+  }
+
+  function selectedFieldsForPreset(preset) {
+    // 你目前已验证：synonyms 预设要 pos_cn, phonetic_uk, synonyms
+    if (preset === "synonyms") return ["pos_cn", "phonetic_uk", "synonyms"];
+
+    // 下面三种你后端能不能支持取决于 field_definitions（先给合理默认）
+    if (preset === "basic") return ["pos_cn", "phonetic_uk"]; // 基础释义（可后续扩展成 cn/en meaning）
+    if (preset === "sent")  return ["pos_cn", "phonetic_uk", "example", "example_cn"]; // 含例句（若后端字段名不同，再改这里）
+    return ["word_norm", "phonetic_uk", "pos_cn", "synonyms", "example", "example_cn"];
+  }
+
+  // =============== Preset UI ===============
+  document.querySelectorAll("#presetChips .chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#presetChips .chip").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      activePreset = btn.getAttribute("data-preset");
+      log(`preset => ${activePreset}`);
+    });
+  });
+
+  // =============== Main flow ===============
+  btnRun.addEventListener("click", async () => {
+    btnRun.disabled = true;
+    runStatus.innerHTML = `<span class="muted">运行中...</span>`;
+    vocabNoteArea.innerHTML = `<div class="hint">生成中...</div>`;
+    practiceArea.innerHTML = `<div class="hint">生成中...</div>`;
+    btnDownloadVocab.disabled = true;
+    btnDownloadPractice.disabled = true;
+
+    currentRunId = "";
+    lastExport = null;
+    lastMaster = null;
+    vocabExcelPath = "";
+    masterXlsxPath = "";
+
+    try {
+      const passageText = ($("passage").value || "").trim();
+      const scatteredText = ($("scattered").value || "").trim();
+      const count = parseInt($("countSel").value, 10);
+      const selected_fields = selectedFieldsForPreset(activePreset);
+
+      // 1) pipeline
+      const pipReq = {
+        passage_text: passageText,
+        scattered_text: scatteredText,
+        count,
+        selected_fields,
+        cache_mode: "FORCE_OVERWRITE",
+        force_regen: true,
+        temp_only: false
+      };
+      log(`POST pipeline\n${JSON.stringify(pipReq)}`);
+      const pipResp = await postJson(ENDPOINTS.pipeline, pipReq);
+      log(`pipelineResp: run_id=${pipResp.run_id} words=${(pipResp.words_merged||[]).length}`);
+
+      currentRunId = pipResp.run_id;
+      runIdEl.textContent = currentRunId;
+
+      // 2) export vocab_note
+
+      function vocabNoteVariantForPreset(preset) {
+        // 这几个字符串必须和后端 ExportVocabNoteRequest.variant 支持的枚举一致
+        if (preset === "synonyms") return "with_synonyms";     // 同义替换版
+        if (preset === "sent")     return "with_example";     // 含例句版（横板：No/word_norm/phonetic/pos_cn/example）
+        if (preset === "basic")    return "basic_cn";             // 基础版（如果你后端支持）
+        return "all_fields";                                  // 全字段（如果你后端支持）
+      }
+
+      const exportReq = {
+        run_id: currentRunId,
+        sheet_name: "vocab",
+        output_xlsx: "",
+        output_docx: "",
+        variant: vocabNoteVariantForPreset(activePreset),
+      };
+      
+      log(`POST export vocab_note\n${JSON.stringify(exportReq)}`);
+      const exportResp = await postJson(ENDPOINTS.exportVocabNote, exportReq);
+      lastExport = exportResp;
+
+      // ✅ 确认字段：exportResp.excel / exportResp.docx（你已给出）
+      vocabExcelPath = exportResp.excel || "";
+      const vocabDocxPath = exportResp.docx || "";
+      log(`exportResp: excel=${vocabExcelPath} docx=${vocabDocxPath}`);
+
+      // 3) generate missing audio（optional）
+      try {
+        const genReq = {
+          run_id: currentRunId,
+          vocab_excel: vocabExcelPath,
+          sheet_name: "vocab",
+          accents: ["uk", "us"],
+          max_words: 200,
+          write_uploaded: true
+        };
+        log(`POST audio generate_from_vocab_note (optional)\n${JSON.stringify(genReq)}`);
+        await postJson(ENDPOINTS.audioGenerateFromVocabNote, genReq);
+        log(`generate_from_vocab_note OK`);
+      } catch (e) {
+        log(`generate_from_vocab_note failed (ignored): ${String(e.message || e)}`);
+      }
+
+      // 4) compose final vocab_note mp3（以成功为准）
+      let vocabAudioOk = false;
+      try {
+        const composeReq = {
+          run_id: currentRunId,
+          vocab_excel: vocabExcelPath,
+          only_sheets: "vocab",
+          audio_root: "storage/audio_cache",
+          ffmpeg_bin: "ffmpeg",
+          ffprobe_bin: "ffprobe",
+          no_manifest: false,
+          global_cache: "storage/global_cache.json",
+          uploaded_cache: "storage/uploaded_vocab_cache.json",
+          accent: "uk",
+          // 不传 output_mp3，让后端默认（避免你 S4 那种写错 run_id 的情况）
+          output_mp3: ""
+        };
+        log(`POST audio vocab_note (compose final)\n${JSON.stringify(composeReq)}`);
+        const composeResp = await postJson(ENDPOINTS.audioVocabNoteCompose, composeReq);
+        log(`compose vocab_note resp: ${JSON.stringify(composeResp)}`);
+        vocabAudioOk = true;
+      } catch (e) {
+        vocabAudioOk = false;
+        log(`compose vocab_note failed: ${String(e.message || e)}`);
+      }
+
+      // 5) list + render vocab_note downloads
+      const vnFiles = await listOutFiles(currentRunId, CATS.vocab_note);
+      const items = vnFiles
+        .filter(fn => /\.(docx|xlsx)$/i.test(fn))
+        .map(fn => ({ cat: CATS.vocab_note, fn }));
+
+      if (vocabAudioOk) {
+        try {
+          const auFiles = await listOutFiles(currentRunId, CATS.audio);
+          const target = `vocab_note__${currentRunId}.mp3`;
+          if (auFiles.includes(target)) {
+            items.push({ cat: CATS.audio, fn: target });
+          } else {
+            // 兜底：按前缀匹配
+            const cand = auFiles.filter(fn => fn.includes(`vocab_note__${currentRunId}`) && /\.mp3$/i.test(fn));
+            if (cand.length > 0) items.push({ cat: CATS.audio, fn: cand[0] });
+          }
+        } catch {}
+      }
+
+      renderMixedList(vocabNoteArea, items, "vocab");
+      btnDownloadVocab.disabled = items.length === 0;
+      vocabNoteStatus.innerHTML = items.length ? `<span class="ok">就绪</span>` : `<span class="bad">未发现文件</span>`;
+
+      // 6) practice master (S5)
+      const masterReq = {
+        run_id: currentRunId,
+        vocab_excel: vocabExcelPath,
+        sheet_name: "vocab",
+        output_xlsx: "",
+        meta_json: "",
+        max_rows_per_sheet: 25,
+        base_sheet_name: "shuffle_e2c",
+        seed: 0
+      };
+      log(`POST practice/master\n${JSON.stringify(masterReq)}`);
+      const masterResp = await postJson(ENDPOINTS.practiceMaster, masterReq);
+      lastMaster = masterResp;
+      masterXlsxPath = masterResp.output_xlsx || "";
+      log(`masterResp: master_xlsx=${masterXlsxPath}`);
+
+      // 7) practice docx (S6)
+      const docxReq = {
+        run_id: currentRunId,
+        master_xlsx: masterXlsxPath,
+        output_dir: "",
+        types: [],
+        timestamp: ""
+      };
+      log(`POST practice/docx\n${JSON.stringify(docxReq)}`);
+      const docxResp = await postJson(ENDPOINTS.practiceDocx, docxReq);
+      log(`practice docx resp: ${JSON.stringify(docxResp)}`);
+
+      // 8) practice compose audio (S7)（失败不阻断）
+      let practiceAudioOk = false;
+      try {
+        const paReq = {
+          run_id: currentRunId,
+          master_xlsx: masterXlsxPath,
+          sheet: "",
+          make_parts: true,
+          prefix: "",
+          output_dir: "",
+          audio_root: "storage/audio_cache",
+          ffmpeg_bin: "ffmpeg",
+          ffprobe_bin: "ffprobe",
+          no_manifest: false
+        };
+        log(`POST audio compose practice (optional)\n${JSON.stringify(paReq)}`);
+        const paResp = await postJson(ENDPOINTS.practiceComposeAudio, paReq);
+        log(`practice audio resp: ${JSON.stringify(paResp)}`);
+        practiceAudioOk = true;
+      } catch (e) {
+        practiceAudioOk = false;
+        log(`practice audio compose failed (ignored): ${String(e.message || e)}`);
+      }
+
+      // 9) list + render practice downloads
+      const pdFiles = await listOutFiles(currentRunId, CATS.practice_docx);
+      const wantDocx = (activePreset === "synonyms")
+        ? pdFiles.filter(fn => /单词/i.test(fn) && !/例句/i.test(fn))
+        : pdFiles;
+
+      const pitems = wantDocx
+        .filter(fn => /\.docx$/i.test(fn))
+        .map(fn => ({ cat: CATS.practice_docx, fn }));
+
+      if (practiceAudioOk) {
+        try {
+          const auFiles = await listOutFiles(currentRunId, CATS.audio);
+          const target = `practice_master__${currentRunId}__shuffle_e2c_full.mp3`;
+          if (auFiles.includes(target)) {
+            pitems.push({ cat: CATS.audio, fn: target });
+          } else {
+            const cand = auFiles.filter(fn =>
+              fn.includes(`practice_master__${currentRunId}`) &&
+              fn.includes("shuffle_e2c") &&
+              fn.includes("_full") &&
+              /\.mp3$/i.test(fn)
+            );
+            if (cand.length > 0) pitems.push({ cat: CATS.audio, fn: cand[0] });
+          }
+        } catch {}
+      }
+
+      renderMixedList(practiceArea, pitems, "practice");
+      btnDownloadPractice.disabled = pitems.length === 0;
+      practiceStatus.innerHTML = pitems.length ? `<span class="ok">就绪</span>` : `<span class="bad">未发现文件</span>`;
+
+      runStatus.innerHTML = `<span class="ok">完成</span>`;
+      log(`DONE run_id=${currentRunId}`);
+
+    } catch (e) {
+      runStatus.innerHTML = `<span class="bad">${escapeHtml(String(e.message || e))}</span>`;
+      vocabNoteArea.innerHTML = `<div class="hint">-</div>`;
+      practiceArea.innerHTML = `<div class="hint">-</div>`;
+      vocabNoteStatus.innerHTML = `<span class="bad">失败</span>`;
+      practiceStatus.innerHTML = `<span class="bad">失败</span>`;
+      log(`ERROR: ${String(e.message || e)}`);
+      alert(String(e.message || e));
+    } finally {
+      btnRun.disabled = false;
+    }
+  });
+
+  // =============== Single download buttons ===============
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-dl]");
+    if (!b) return;
+    if (!currentRunId) return;
+
+    const cat = b.getAttribute("data-cat");
+    const fn = b.getAttribute("data-fn");
+    const outName = prefixOrEmpty() + fn; // 不改后端，仅改下载名
+
+    try {
+      await downloadBlob(ENDPOINTS.downloadFile(currentRunId, cat, fn), outName);
+      log(`download single OK: ${cat}/${fn} => ${outName}`);
+    } catch (err) {
+      log(`download single FAILED: ${String(err.message || err)}`);
+      alert(String(err.message || err));
+    }
+  });
+
+  // =============== Multi-download: vocab (by category zip) ===============
+  btnDownloadVocab.addEventListener("click", async () => {
+    if (!currentRunId) return;
+    const picked = getChecked("vocab");
+    if (picked.length === 0) return alert("未选择文件");
+
+    const prefixRaw = ($("namePrefix").value || "").trim();
+
+    try {
+      if (picked.length === 1) {
+        const {cat, fn} = picked[0];
+        await downloadBlob(ENDPOINTS.downloadFile(currentRunId, cat, fn), prefixOrEmpty() + fn);
+        return;
+      }
+      const groups = {};
+      picked.forEach(it => {
+        groups[it.cat] = groups[it.cat] || [];
+        groups[it.cat].push(it.fn);
+      });
+      for (const cat of Object.keys(groups)) {
+        const zipName = `${prefixOrEmpty()}bundle__${currentRunId}__${cat}.zip`;
+        await downloadBlob(ENDPOINTS.categoryZip(currentRunId, cat, prefixRaw), zipName);
+      }
+      log(`download vocab bundles OK`);
+    } catch (e) {
+      log(`download vocab bundles FAILED: ${String(e.message || e)}`);
+      alert(String(e.message || e));
+    }
+  });
+
+  // =============== Multi-download: practice (by category zip) ===============
+  btnDownloadPractice.addEventListener("click", async () => {
+    if (!currentRunId) return;
+    const picked = getChecked("practice");
+    if (picked.length === 0) return alert("未选择文件");
+
+    const prefixRaw = ($("namePrefix").value || "").trim();
+
+    try {
+      if (picked.length === 1) {
+        const {cat, fn} = picked[0];
+        await downloadBlob(ENDPOINTS.downloadFile(currentRunId, cat, fn), prefixOrEmpty() + fn);
+        return;
+      }
+      const groups = {};
+      picked.forEach(it => {
+        groups[it.cat] = groups[it.cat] || [];
+        groups[it.cat].push(it.fn);
+      });
+      for (const cat of Object.keys(groups)) {
+        const zipName = `${prefixOrEmpty()}bundle__${currentRunId}__${cat}.zip`;
+        await downloadBlob(ENDPOINTS.categoryZip(currentRunId, cat, prefixRaw), zipName);
+      }
+      log(`download practice bundles OK`);
+    } catch (e) {
+      log(`download practice bundles FAILED: ${String(e.message || e)}`);
+      alert(String(e.message || e));
+    }
+  });
+
+  // =============== Grading ===============
+  gradingFileEl.addEventListener("change", () => {
+    btnGrade.disabled = !(gradingFileEl.files && gradingFileEl.files.length > 0);
+  });
+
+  btnGrade.addEventListener("click", async () => {
+    if (!(gradingFileEl.files && gradingFileEl.files[0])) return;
+    const f = gradingFileEl.files[0];
+    btnGrade.disabled = true;
+    gradingMsg.textContent = "批改中...";
+
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+
+      // 这里假设你的 grading route 是 /v1/grading/upload 或类似；
+      // 你原本代码里 ENDPOINTS.grading 没贴出来，我保持“从全局变量读”——你自己把它补上即可。
+      // 如果你已在旧版 index.html 里定义了 ENDPOINTS.grading，把下面这行替换成你真实 endpoint。
+      const gradingEndpoint = (ENDPOINTS.grading) ? ENDPOINTS.grading : (API + "/v1/grading/upload");
+
+      log(`POST grading upload: ${f.name}`);
+      const res = await fetch(gradingEndpoint, { method: "POST", body: fd });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`批改失败 HTTP ${res.status}: ${txt}`);
+      }
+      const blob = await res.blob();
+
+      const a = document.createElement("a");
+      const u = URL.createObjectURL(blob);
+      a.href = u;
+
+      const base = f.name.replace(/\.(docx|zip)$/i, "");
+      const ext = f.name.toLowerCase().endsWith(".zip") ? "zip" : "docx";
+      a.download = `${prefixOrEmpty()}${base}__graded.${ext}`;
+
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(u);
+
+      gradingMsg.innerHTML = `<span class="ok">批改完成，已开始下载</span>`;
+      log(`grading OK => download started`);
+    } catch (e) {
+      gradingMsg.innerHTML = `<span class="bad">${escapeHtml(String(e.message || e))}</span>`;
+      log(`grading FAILED: ${String(e.message || e)}`);
+      alert(String(e.message || e));
+    } finally {
+      btnGrade.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

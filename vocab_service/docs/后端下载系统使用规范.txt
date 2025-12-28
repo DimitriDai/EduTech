@@ -1,0 +1,31 @@
+# 下载系统使用规则
+
+1. category 只能是：
+   - vocab_note
+   - practice_docx
+   - audio
+   - grading_results
+
+2. filename 不手写，必须来自：
+   GET /v1/files/out/{run_id}/{category}
+
+3. 下载 URL 公式：
+   /v1/files/out/{run_id}/{category}/{filename}
+
+4. 禁止：
+   - 用户输入 category
+   - 用户输入 filename
+
+{
+  "run_id": "20251225_081342_9606aa",
+  "category": "vocab_note",
+  "files": [
+    "_vocab_note_audio_input__20251224_074248_e30439.json",
+    "vocab_note_20251224_074248_e30439.manifest.json",
+    "vocab_note_20251224_074248_e30439.mp3",
+    "vocab_note__20251224_074248_e30439.docx",
+    "vocab_note__20251224_074248_e30439.meta.json",
+    "vocab_note__20251224_074248_e30439.xlsx",
+    "vocab_note_audio.meta.json"
+  ]
+}

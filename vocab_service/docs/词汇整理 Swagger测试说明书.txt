@@ -1,0 +1,502 @@
+
+Remian 作的是系动词+adj
+The lead 线索
+Crack the code 破解密码
+cryptology experts 解码学专家
+Brother-in-law 姐妹的老公
+Sister-in-law 弟媳
+Daughter-in-law 公婆的媳妇
+Son-in-law 女婿
+出题人要的选项答案往往是简单的原文再现，不需要太多进一步的推导（除非是事实层面:eg.时间、地点）
+
+
+
+完整测试流程
+S0. 配置系统环境+打开测试
+$Env:PIPER_BIN="C:\tts\piper\piper.exe"
+$Env:PIPER_UK_MODEL="C:\tts\piper\en_GB-alba-medium.onnx"
+$Env:PIPER_US_MODEL="C:\tts\piper\en_US-amy-medium.onnx"
+
+$Env:AUDIO_ROOT="C:\Users\24340\Desktop\EduTech\vocab_service\storage\audio_cache"
+$Env:GLOBAL_CACHE="storage\global_cache.json"
+$Env:UPLOADED_CACHE="storage\uploaded_vocab_cache.json"
+$Env:AUDIO_URL_PREFIX="/static/audio"
+
+$Env:FFMPEG_BIN="C:\ffmpeg\bin\ffmpeg.exe"
+
+$Env:GLOBAL_CACHE="storage\global_cache.json"
+$Env:UPLOADED_CACHE="storage\uploaded_vocab_cache.json"
+$Env:AUDIO_ROOT="C:\Users\24340\Desktop\EduTech\vocab_service\storage\audio_cache"
+$Env:AUDIO_URL_PREFIX="/static/audio"
+
+cd C:\Users\24340\Desktop\EduTech\vocab_service
+python -m uvicorn app:app --reload --port 8000
+
+浏览器打开：
+http://127.0.0.1:8000/static/index.html
+
+S0.1 打开Swagger浏览器(端口可以变)
+http://127.0.0.1:8000/docs
+
+S1. 测试pipeline，extract
+{
+  "passage_text": "The Value of Literary Prizes\nParagraph A\nIt is a central paradox of literary writing that true greatness only becomes apparent over time, and yet that the judgements of the future are substantially dependent on what the present chooses to publish, publicise and preserve. Viewed from the pinnacles of hindsight, literary history looks like a stately procession of great texts. A snapshot taken at any particular moment, however, reveals a far messier business: one clogged with readers, writers, commercial obligations, prejudices and misconceptions. All those enduring works that collectively form a standard by which we judge others are busily being forged or maintained within that snapshot. And somewhere close to the heart of this business lies one of the most ancient and contentious of all artistic institutions: the literary prize.\nParagraph B\nThe ancient Greeks founded the idea of the literary prize. In fact, the Greek calendar was full of formal contests, most of which were either poetical, athletic or some combination of the two; the competitive singing of dithyrambs—choruses of praise to the god Dionysus—was a kind of literary sport, with groups of up to 50 men or boys moving in stately circles and declaiming verse in order to win the honour of coming first. It might look comical to our eyes, but this was art of the most serious kind. To my mind, just as sporting spectacles today offer people the thrill of watching the human body pushed toward its limits, so the quest for supremacy in words made the deepest concerns of the mind accessible to a wide audience in classical Greece.\nParagraph C\nAfter the classical era, the importance of prizes diminished. Later, in medieval Europe, aristocratic patrons and learned societies singled out the most promising writers and commissioned and rewarded them. It was only at the start of the 20th century that the first truly modern literary prize arrived. Alfred Nobel, the inventor of dynamite, bequeathed an immense sum, equivalent to US $186m today, to fund five international prizes in the fields of literature, chemistry, physics, medicine and peace (prompted, it is said, by the guilt he felt when a French newspaper described him as a ‘merchant of death’). In 1901, the first Nobel prizes were announced. Crucially, they were awarded not by patrons or clubs, but by impartial and authoritative committees—something as close to an absolute and enduring standard as the modern world could find. Their impact was instant, and the results were reported in over 100 newspapers worldwide. Like the newly reborn Olympic movement (founded in 1896), here was an annual competition that would deliver a stream of victory headlines.\nParagraph D\nNobel imitators soon came thick and fast: the Goncourt and Femina prizes in France, the Pulitzer in America, and many more. However, as the years went by neither the gradual expansion of the universities nor the increasing number of awards seemed to be infusing the general reader with an overwhelming regard for great literary works. For example, in 1955, the recently formed British Crime Writers’ Association started an annual prize for the best crime novel; in the same year, there was an annual award for Science Fiction. What was emerging was a complex system of patronage whose value was open to dispute. Perhaps the most familiar example of this is Britain’s Booker prize (now the Man Booker). Where the Nobel had aimed at rewarding ‘an ideal direction’ in literature, this award intended to stimulate interest in ‘serious British fiction as a whole’. The people behind it had clearly learned something from the bestseller market. The Booker would aim at catching the imagination of the press by establishing an explicitly sporting-style atmosphere: a shortlist of authors, a high-profile panel of judges, an exciting victor. Above all, though, what came to impress was the fact that by the 1990s, winners could regularly expect to shift over 500,000 copies.\nParagraph E\nYet there is a pale glow of illusion surrounding the wider claims made for prizes. Winners can prosper, but no victory guarantees vast sales. Most importantly, there is still no substitute for word of mouth. In 2007, The Reluctant Fundamentalist by Mohsin Hamid lost out to Kiran Desai’s The Inheritance of Loss in the Man Booker, but considerably outsold it, becoming one of the best-performing literary novels of the year. It was also a far more ambitious and exciting book. Prizes grant opportunities, but their winners remain at the mercy of the reading public. And the bottom line is that this public is ill-served by much of the current marketplace of overlapping awards and those books that are manufactured to claim them—sensitive, trendy tracts of needlessly effortful prose whose elegant openings so impress some juries.\nParagraph F\nIf, however, we are willing to have a little more faith in the hunger that’s still out there for fresh, awakening words, there remain causes for hope. Literature should take a step towards this audience—should wind down some of the media circus, shed its timid obsession with narrow categories, and learn a little more from the worlds both of genre fiction (where much that is most exciting in contemporary writing is taking place) and grassroots prizes like the Man Booker. But we should thin out the other awards, and spend some money instead on competitions that will get writers’ first books into print. We should restore proper expertise to juries, and then—and only then—open the door to science fiction, crime, thrillers, horror and everything else that’s out there racking up sales.",
+  "scattered_text": " ",
+  "count": 15,
+  "selected_fields": [
+    "pos_cn",
+    "phonetic_uk",
+    "synonyms"
+  ],
+  "cache_mode": "FORCE_OVERWRITE"
+}
+
+返回结果拿到run_id：
+{
+  "run_id": "20251225_163849_a99a65",
+  "words_merged": [
+    "literary writing",
+    "true greatness",
+    "literary history",
+    "enduring works",
+    "literary prize",
+    "formal contests",
+    "competitive singing",
+    "deepest concerns",
+    "aristocratic patrons",
+    "learned societies",
+    "impartial and authoritative committees",
+    "annual competition",
+    "complex system of patronage",
+    "word of mouth",
+    "overlapping awards"
+  ],
+
+S2. 测试export，生成vocab_note
+{
+  "run_id": "20251225_163849_a99a65",
+  "sheet_name": "vocab",
+  "output_xlsx": "",
+  "output_docx": "",
+  "variant": "with_synonyms"
+}
+
+返回结果：
+{
+  "run_id": "20251225_163849_a99a65",
+  "excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.xlsx",
+  "docx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.docx",
+  "variant": "with_synonyms",
+  "count": 15
+}
+
+S3. 测试音频，生成vocab_note所miss的audio
+{
+  "run_id": "20251225_163849_a99a65",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.xlsx",
+  "sheet_name": "vocab",
+  "accents": ["uk", "us"],
+  "max_words": 200,
+  "write_uploaded": true
+}
+返回结果：
+{
+  "ok": true,
+  "total_words": 15,
+  "ok_words": 30,
+  "failed_words": 0,
+  "results": [
+    {
+      "word_original": "central paradox",
+      "slug": "central_paradox",
+      "uk": {
+        "ok": true,
+        "format": "mp3",
+        "url": "/static/audio/uk/central_paradox.mp3"
+      },
+      "us": {
+        "ok": true,
+        "format": "mp3",
+        "url": "/static/audio/us/central_paradox.mp3"
+      }
+    },
+    {
+      "word_original": "literary history",
+      ……
+
+S4. 合成vocab_note所需的正序audio(注意端口名称：Compose Vocab Note Audio)
+{
+  "run_id": "20251225_163849_a99a65",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.xlsx",
+  "only_sheets": "vocab",
+  "audio_root": "storage/audio_cache",
+  "output_mp3": "storage/out/20251224_074248_e30439/vocab_note/vocab_note_20251224_074248_e30439.mp3",
+  "ffmpeg_bin": "ffmpeg",
+  "ffprobe_bin": "ffprobe",
+  "no_manifest": false,
+  "global_cache": "storage/global_cache.json",
+  "uploaded_cache": "storage/uploaded_vocab_cache.json",
+  "accent": "uk"
+}
+
+返回结果：
+	
+Response body
+Download
+{
+  "run_id": "20251225_163849_a99a65",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.xlsx",
+  "output_mp3": "storage/out/20251224_074248_e30439/vocab_note/vocab_note_20251224_074248_e30439.mp3",
+  "manifest_json": "storage/out/20251224_074248_e30439/vocab_note/vocab_note_20251224_074248_e30439.manifest.json"
+}
+
+S5. 生成乱序测试所需要的核心组件：master.xlsx
+{
+  "run_id": "20251225_163849_a99a65",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.xlsx",
+  "sheet_name": "vocab",
+  "output_xlsx": "",
+  "meta_json": "",
+  "max_rows_per_sheet": 25,
+  "base_sheet_name": "shuffle_e2c",
+  "seed": 0
+}
+返回结果：
+{
+  "run_id": "20251225_163849_a99a65",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.xlsx",
+  "output_xlsx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_master__20251225_163849_a99a65__shuffle_e2c.xlsx",
+  "meta_json": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_master__20251225_163849_a99a65__shuffle_e2c.meta.json",
+  "rows": 15,
+  "present_keys": [
+    "phonetic_uk",
+    "pos_cn",
+    "synonyms",
+    "word_original"
+  ],
+  "available_practice_types": [
+    "word_e2c",
+    "word_c2e"
+  ]
+}
+
+S6. 生成乱序测试docx4类练习的测试用例：
+{
+  "run_id": "20251225_163849_a99a65",
+  "master_xlsx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_master__20251225_163849_a99a65__shuffle_e2c.xlsx",
+  "output_dir": "",
+  "types": [],
+  "timestamp": ""
+}
+
+返回结果：
+{
+  "run_id": "20251225_163849_a99a65",
+  "master_xlsx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_master__20251225_163849_a99a65__shuffle_e2c.xlsx",
+  "output_dir": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_docx",
+  "generated": [
+    "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_docx\\练习_单词_英译中_20251225_164411_20251225_163849_a99a65.docx",
+    "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_docx\\练习_单词_中译英_20251225_164411_20251225_163849_a99a65.docx"
+  ],
+  "skipped": [
+    "sent_e2c",
+    "sent_c2e"
+  ]
+}
+
+S7. 合成乱序测试所需要的audio(注意端口名称：Compose Audio):
+{
+  "run_id": "20251225_163849_a99a65",
+  "master_xlsx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_master__20251225_163849_a99a65__shuffle_e2c.xlsx",
+  "sheet": "",
+  "make_parts": true,
+  "prefix": "",
+  "output_dir": "",
+  "audio_root": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\audio_cache",
+  "ffmpeg_bin": "C:\\ffmpeg\\bin\\ffmpeg.exe",
+  "ffprobe_bin": "C:\\ffmpeg\\bin\\ffprobe.exe",
+  "no_manifest": false
+}
+
+返回结果：
+{
+  "run_id": "20251225_163849_a99a65",
+  "master_xlsx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\practice_master__20251225_163849_a99a65__shuffle_e2c.xlsx",
+  "output_dir": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\audio",
+  "generated": [
+    "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\audio\\practice_master__20251225_163849_a99a65__shuffle_e2c_full.manifest.json",
+    "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\audio\\practice_master__20251225_163849_a99a65__shuffle_e2c_full.mp3",
+    "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\audio\\practice_master__20251225_163849_a99a65__shuffle_e2c_part_01_shuffle_e2c.manifest.json",
+    "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\audio\\practice_master__20251225_163849_a99a65__shuffle_e2c_part_01_shuffle_e2c.mp3"
+  ],
+  "meta_json": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\audio\\audio.meta.json"
+}
+
+S8. 上述任意步骤都支持去Download,但必须先在ListRunCategoryFiles跑一遍，再按需Download
+# 下载系统使用规则
+1. category 只能是：
+   - vocab_note
+   - practice_docx
+   - audio
+   - grading_results
+2. filename 不手写，必须来自：
+   GET /v1/files/out/{run_id}/{category}
+3. 下载 URL 公式：
+   /v1/files/out/{run_id}/{category}/{filename}
+4. 禁止：
+   - 用户输入 category
+   - 用户输入 filename
+
+
+S9. 在学生完成后，可以使用Grading了，操作最简单：输入run_id，上传file即可
+
+---------------------------------------------------------------------------------
+
+上线都要确认：
+前端或者后端有的地方要改域名
+需要README
+需要给一些脚本添加一些上线的需求
+需要并发防御等
+上线后用户上传的单词音频是需要定期补的，所以tools/audio_missing_fill 定期跑（你已经写好）
+python .\tools\audio_cache_build.py --global_cache "storage/global_cache.json" --uploaded_cache "storage/uploaded_vocab_cache.json" --write_uploaded --audio_root "storage/audio_cache" --format mp3 --piper_bin "C:\tts\piper\piper.exe" --uk_model "C:\tts\piper\en_GB-alba-medium.onnx" --us_model "C:\tts\piper\en_US-amy-medium.onnx" --url_mode static --url_prefix "/static/audio" --limit 2000
+
+2) tools/missing_audio_enqueue.py（缺失队列生成/追加）
+
+用途（上线友好）：
+
+扫 global_cache.json（必选）和 uploaded_vocab_cache.json（可选）
+
+检查音频字段是否为空、或音频 URL 指向的文件是否不存在
+
+把缺失的词写入 storage/missing_audio_queue.jsonl（jsonl 逐行追加，安全）
+
+你未来上线后，“运行时缺失记录”也可以复用这个队列格式：直接往 jsonl 追加即可。
+
+---------------------
+
+1）先导出本次“词汇笔记 Excel”（从 cache）
+python "C:\Users\24340\Desktop\EduTech\vocab_service\generators\excel_generator.py" --mode vocab_note --global_cache "C:\Users\24340\Desktop\EduTech\vocab_service\storage\global_cache.json" --output "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\词汇笔记_20251222_103444_run01.xlsx" --preset "all" --sheet_name "vocab"
+2.1) 只生成 4 份“词汇笔记 docx”
+python .\generators\docx_generator.py --vocab_excel "storage/out/词汇笔记_20251222_103444_run01.xlsx" --out_dir "storage/out/docx"
+2.2）再从词汇笔记生成 shuffle master（固定名覆盖也可以）
+python "C:\Users\24340\Desktop\EduTech\vocab_service\generators\excel_generator.py" --mode shuffle_e2c --vocab_excel "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\词汇笔记_20251222_103444_run01.xlsx" --output "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\shuffle_e2c_master.xlsx" --sheet_name "vocab" --max_rows_per_sheet 25
+3) 生成乱序excel的音频（拼接全量的full版）
+python "C:\Users\24340\Desktop\EduTech\vocab_service\generators\excel_generator.py" --mode shuffle_e2c --vocab_excel "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\词汇笔记_20251222_103444_run01.xlsx" --output "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\shuffle_e2c_master.xlsx" --sheet_name "vocab" --max_rows_per_sheet 25
+4) 一键生成 full + parts 音频（走 audio_orchestrator）
+python "C:\Users\24340\Desktop\EduTech\vocab_service\tools\audio_orchestrator.py" --input_excel "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\shuffle_e2c_master.xlsx" --output_dir "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\audio_test" --audio_root "C:\Users\24340\Desktop\EduTech\vocab_service\storage\audio_cache" --make_parts
+5) 同时生成 4 份乱序练习 docx
+python "C:\Users\24340\Desktop\EduTech\vocab_service\tools\practice_excel_to_docx.py" --input_xlsx "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out\shuffle_e2c_master.xlsx" --output_dir "C:\Users\24340\Desktop\EduTech\vocab_service\storage\out"
+
+
+Swagger 正式测试（你现在只做这个）
+
+## 1️⃣ 重启服务
+
+## 2️⃣ 打开 Swagger
+
+```
+http://127.0.0.1:8000/docs
+```
+
+## 3️⃣ 先跑 pipeline（你已会）
+
+## 4️⃣ 再跑这个接口：
+
+**`POST /v1/export/vocab_note`**
+
+### 请求体（直接复制）
+
+```json
+
+生成完整词汇表的测试用例：
+{
+  "run_id": "20251225_163849_a99a65",
+  "sheet_name": "vocab",
+  "output_xlsx": "",
+  "output_docx": "",
+  "variant": "with_synonyms"
+}
+
+
+测试可填的variant:
+all_fields
+with_example
+with_synonyms
+basic_cn
+
+生成乱序测试master表的测试用例：
+{
+  "run_id": "20251224_084510_bfc448",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251224_084510_bfc448\\vocab_note__20251224_084510_bfc448.xlsx",
+  "sheet_name": "vocab",
+  "output_xlsx": "",
+  "meta_json": "",
+  "max_rows_per_sheet": 25,
+  "base_sheet_name": "shuffle_e2c",
+  "seed": 0
+}
+
+生成乱序测试docx4类练习的测试用例：
+{
+  "run_id": "20251224_084510_bfc448",
+  "master_xlsx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251224_084510_bfc448\\practice_master__20251224_084510_bfc448__shuffle_e2c.xlsx",
+  "output_dir": "",
+  "types": [],
+  "timestamp": ""
+}
+
+补充vocab_note本次run中没有的音频 测试用例：
+{
+  "run_id": "20251225_163849_a99a65",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251225_163849_a99a65\\vocab_note\\vocab_note__20251225_163849_a99a65.xlsx",
+  "sheet_name": "vocab",
+  "accents": ["uk", "us"],
+  "max_words": 200,
+  "write_uploaded": true
+}
+
+
+合成正序音频的测试用例：
+{
+  "run_id": "20251224_074248_e30439",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251224_074248_e30439\\vocab_note__20251224_074248_e30439.xlsx",
+  "only_sheets": "vocab",
+  "audio_root": "storage/audio_cache",
+  "output_mp3": "storage/out/20251224_074248_e30439/vocab_note_20251224_074248_e30439.mp3",
+  "ffmpeg_bin": "ffmpeg",
+  "ffprobe_bin": "ffprobe",
+  "no_manifest": false,
+  "global_cache": "storage/global_cache.json",
+  "uploaded_cache": "storage/uploaded_vocab_cache.json",
+  "accent": "uk"
+}
+
+
+Test-Path "C:\tts\piper\piper.exe"
+Test-Path "C:\tts\piper\en_GB-alba-medium.onnx"
+Test-Path "C:\tts\piper\en_US-amy-medium.onnx"
+
+{
+  "run_id": "20251224_074248_e30439",
+  "vocab_excel": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251224_074248_e30439\\vocab_note__20251224_074248_e30439.xlsx",
+  "only_sheets": "vocab",
+  "audio_root": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\audio_cache",
+  "ffmpeg_bin": "C:\\ffmpeg\\bin\\ffmpeg.exe",
+  "ffprobe_bin": "C:\\ffmpeg\\bin\\ffprobe.exe",
+  "global_cache": "storage/global_cache.json",
+  "uploaded_cache": "storage/uploaded_vocab_cache.json",
+  "accent": "uk",
+  "output_mp3": "",
+  "no_manifest": false
+}
+
+生成乱序音频的测试用例
+{
+  "run_id": "20251224_074248_e30439",
+  "master_xlsx": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\out\\20251224_074248_e30439\\practice_master__20251224_074248_e30439__shuffle_e2c.xlsx",
+  "sheet": "",
+  "make_parts": true,
+  "prefix": "",
+  "output_dir": "",
+  "audio_root": "C:\\Users\\24340\\Desktop\\EduTech\\vocab_service\\storage\\audio_cache",
+  "ffmpeg_bin": "C:\\ffmpeg\\bin\\ffmpeg.exe",
+  "ffprobe_bin": "C:\\ffmpeg\\bin\\ffprobe.exe",
+  "no_manifest": false
+}
+
+可配置的音频及缓存系统环境
+$Env:PIPER_BIN="C:\tts\piper\piper.exe"
+$Env:PIPER_UK_MODEL="C:\tts\piper\en_GB-alba-medium.onnx"
+$Env:PIPER_US_MODEL="C:\tts\piper\en_US-amy-medium.onnx"
+
+$Env:AUDIO_ROOT="C:\Users\24340\Desktop\EduTech\vocab_service\storage\audio_cache"
+$Env:GLOBAL_CACHE="storage\global_cache.json"
+$Env:UPLOADED_CACHE="storage\uploaded_vocab_cache.json"
+$Env:AUDIO_URL_PREFIX="/static/audio"
+
+$Env:FFMPEG_BIN="C:\ffmpeg\bin\ffmpeg.exe"
+
+$Env:GLOBAL_CACHE="storage\global_cache.json"
+$Env:UPLOADED_CACHE="storage\uploaded_vocab_cache.json"
+$Env:AUDIO_ROOT="C:\Users\24340\Desktop\EduTech\vocab_service\storage\audio_cache"
+$Env:AUDIO_URL_PREFIX="/static/audio"
+
+
+```
+Get-ChildItem $Env:AUDIO_ROOT\uk -Filter "chemical_secrets*.mp3"
+Get-ChildItem $Env:AUDIO_ROOT\us -Filter "coastal_structures*.mp3"
+
+## 5️⃣ 验收标准（只有这 2 条）
+
+* `vocab_note.xlsx` 能打开
+* `vocab_note.docx` **版式 = 你 docx_generator 定的那套**
+
+---
+
+# 五、现在的状态一句话总结
+
+> **Swagger 测试已经从「entry 层」正式进入「交付物层」**
+>
+> 下一步（等你确认这一条 OK）才是：
+> **vocab_note.xlsx → shuffle practice excel**
+
+你先跑。
+有 **任何报错**，把 Swagger 返回的 `detail` **原样贴我**，我只告诉你：
+**改哪一行，换成什么。**
+
+
+{
+  "passage_text": "Passage 1\n\nPugilism\n\n\nA Pugilism, a word rarely used today, is another term for boxing, a combat sport and a martial art in which two people throw punches at each other for a predetermined amount of time in a boxing ring. The term pugilism comes from the Latin word \"pugil\", which means \"a boxer\", and is related to the Latin word \"pugnus\", which stands for \"a fist\".\n\nThere is no conclusive evidence of where the practice of boxing comes from. The first known form of boxing seems to have prehistoric origins in present-day Ethiopia, where it presumably appeared in the sixth millennium BC. When the Egyptians invaded Nubia, they learned the art of boxing from the local population, consequently taking the sport to Egypt where it gained considerable popularity. From Egypt, boxing spread to other countries, including Greece, eastward to Mesopotamia, and northward, all the way to Rome. Archaeological evidence of ancient Greek boxing goes as far back as the Minoan and Mycenaean periods. Among numerous legends about the origins of boxing in Greece one stands out in particular. It says that Theseus, the founder of Athens, invented a form of fighting in which two men sat face-to-face and hit each other with their fists until one of them was dead.\n\nB All of this might sound like a barbaric pastime, but there is so much more to it than just two people trying to hit each other as hard as they can. Even back then, the sport had certain rules and regulations. The few rules of boxing in Ancient Greece that are known to us are mostly based on historical references and images. There were no holds or wrestling. Any type of blow with the hand was allowed, but no eye gouging. No ring was used, and there were no rounds or time limits. The fight would go on until one man was knocked out or admitted he had been beaten. Unlike the modern sport, there was no rule against hitting an opponent when he was down. There were no weight classes within the men's and boys' divisions; opponents for a match were chosen randomly. Although there is some evidence of kicks used in ancient Greek boxing, this remains a subject for debate among scholars.\n\nInstead of gloves, Olympic boxers of the time wrapped leather thongs around their hands and wrists, leaving their fingers free. The earliest depiction of ancient boxing gloves in use comes in the form of a Minoan fresco from Thera (modern-day Santorini), which is commonly known as the Boxing Boys, and dates from around 1600 BCE. Eventually down the history road, further safety measures have been introduced to protect boxers from serious injury. The additions included mouthguards and headgear, along with revised rules governing the length of rounds and the conduct of the fight.\n\nC Boxing became an Olympic Games sport as early as 688 BC. This effectively meant boxing was one of the first sports added to the Games. Onomastus of Smyrna was the first winner in Olympic boxing. Despite the lack of rules and the tough nature of boxing at the Ancient Games, honour, respect, and fair play were always at the fulcrum of this noble art. At the time, the god Apollo was regarded as the inventor and guardian of the sport of boxing. Boxers in Ancient Greece who went down in history were revered as superheroes.\n\nBoxing developed over time, with the pursuit of monetary gain becoming a significant part of the sport in England in the 17th century. Popular with the gambling crowd because of its brutality and spectacularity, it slowly evolved to become more civilised. Prizefighting was gaining popularity as well. Men were carefully trained to meet in the roped-off ring, usually marked out in a field. Fights went to a finish, that is, until one of the pair was unable to continue. The concept of modern boxing emerged around the mid-19th century in England. At that time, illegal fights were organized by matchmakers to win bets. Often, the police would come and break up the fights. In 1865, a journalist driven by his passion for pugilism wrote the rules of boxing, referred to as the Marquess of Queensberry’s rules. Among a total of 15 rules, it mandated the fighters to wear gloves, banned wrestling, and generally made this bloody sport more humane. Another thing to note is that it introduced certain standards and promoted sportsmanship.\n\nD Around the same time in the 19th century, the sport began to gain widespread popularity in the United States, where the first world championship fight was held in 1892. This marked the beginning of the \"Golden Age\" of boxing, where legendary fighters such as Jack Johnson, Joe Louis, and Muhammad Ali dominated the sport. By the 20th century, America had become the centre of professional boxing. The sport's economic incentive rose as growing viewership brought larger purses and commercial success. The increasing popularity of boxing led to a rise in minority participation, with the first successful non-white champions coming at the beginning of the 20th century, despite severe racism plaguing their attempts to gain and hold championship titles.\n\nE Although predominantly a men’s sport because of its ruthless nature, women are not left behind. Women's boxing has been getting increasingly more attention over time, with the first women's boxing championship taking place in 1974. Women's amateur boxing championship was first introduced at the 1996 Summer Olympics in Atlanta, Georgia. Since then, it has become a regular part of the Olympic program, where women compete in three weight classes. It was officially recognized as an Olympic sport in 2012.\n\nWomen's professional boxing has also grown in popularity in recent years, with many talented female boxers competing at the highest levels of the sport. Some of the most successful female boxers include Mary Kom of India, who is a five-time World Amateur Boxing champion and the only woman boxer to have won a medal in each one of the six world championships, and Claressa Shields, who is a three-time Olympic gold medalist and the most successful American amateur boxer of all time.\n",
+  "scattered_text": "incentive,encourage, output vs input, abstract vs. specific, contaminate the water and pollute the air一句固定的搭配",
+  "count": 25,
+  "selected_fields": [
+    "pos_cn",
+    "phonetic_uk",
+    "example",
+    "example_cn",
+    "synonyms"
+  ],
+  "cache_mode": "FORCE_OVERWRITE"
+}
+
+
+{
+  "passage_text": "Organic farming can improve soil quality and maintain ecological balance in the long run.",
+  "scattered_text": "carbon footprint; genetically modified crops; food security",
+  "count": 15,
+  "selected_fields": ["pos_cn", "phonetic_uk", "example", "example_cn", "synonyms"],
+  "cache_mode": "USE_CACHE"
+}
+
+{
+  "passage_text": "Write cache concurrently for A: aaa_concurrent_word_A_1.",
+  "scattered_text": "aaa_concurrent_word_A_1",
+  "count": 15,
+  "selected_fields": ["pos_cn", "phonetic_uk", "example", "example_cn", "synonyms"],
+  "cache_mode": "FORCE_OVERWRITE"
+}
+
+
+{
+  "passage_text": "Write cache concurrently for B: bbb_concurrent_word_B_1.",
+  "scattered_text": "bbb_concurrent_word_B_1",
+  "count": 15,
+  "selected_fields": ["pos_cn", "phonetic_uk", "example", "example_cn", "synonyms"],
+  "cache_mode": "FORCE_OVERWRITE"
+}
+
+{
+  "passage_text": "A will write: aaa_keep_me_1.",
+  "scattered_text": "aaa_keep_me_1",
+  "count": 15,
+  "selected_fields": ["pos_cn", "phonetic_uk", "example", "example_cn", "synonyms"],
+  "cache_mode": "FORCE_OVERWRITE"
+}
+
+{
+  "passage_text": "B will write: bbb_keep_me_2.",
+  "scattered_text": "bbb_keep_me_2",
+  "count": 15,
+  "selected_fields": ["pos_cn", "phonetic_uk", "example", "example_cn", "synonyms"],
+  "cache_mode": "FORCE_OVERWRITE"
+}
