@@ -1,0 +1,120 @@
+############################################
+# 0) OS / IDE
+############################################
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.vscode/
+.idea/
+*.swp
+
+############################################
+# 1) Python 通用
+############################################
+__pycache__/
+*.py[cod]
+*.pyd
+
+.venv/
+venv/
+env/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+############################################
+# 2) Secrets / Keys（任何模块都通用）
+############################################
+**/secrets.toml
+**/.env
+**/.env.*
+**/*secret*
+**/*apikey*
+**/*api_key*
+**/*token*
+**/*credential*
+**/*.pem
+**/*.key
+
+############################################
+# 3) 通用“产物/缓存/大文件”
+############################################
+*.log
+
+# 如果你有大量图片/音频/视频产物，不要进 git
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.mov
+
+# 常见导出产物（如果你有“必须提交”的模板，再单独放到 templates/ 并做例外）
+*.docx
+*.xlsx
+*.pptx
+*.pdf
+
+############################################
+# 4) streamlit_wrt_app
+############################################
+# 只忽略密钥；不要整目录忽略 .streamlit（以后你可能会放 config.toml）
+streamlit_wrt_app/.streamlit/secrets.toml
+
+############################################
+# 5) speaking_service
+############################################
+# runs 通常是运行产物：截图、识别文本、prefill 临时文件、answers 导出等
+speaking_service/runs/
+speaking_service/out/
+speaking_service/storage/
+speaking_service/tmp/
+speaking_service/.cache/
+
+# 但你强调 global_cache 是核心资产：明确保留（即便上面有更宽的规则也要保住）
+!speaking_service/cache_global/
+!speaking_service/cache_global/**
+
+# 兜底：如果你把 global_cache 放在 runs/_global_cache（你之前出现过这个路径），也强制保留
+!speaking_service/runs/_global_cache/
+!speaking_service/runs/_global_cache/**
+
+############################################
+# 6) vocab_service
+############################################
+# 这些一般是运行产物/上传文件/音频大目录：不进 git
+vocab_service/storage/**
+
+# 但是：你核心资产必须保留 —— 精确反忽略（保留并可被 git 跟踪）
+!vocab_service/storage/global_cache.json
+!vocab_service/storage/global_cache.jsonl
+!vocab_service/storage/global_cache.bootstrap.json
+!vocab_service/storage/global_cache.boostrap.json
+!vocab_service/storage/uploaded_vocab_cache.json
+!vocab_service/storage/uploaded_vocab_cache.jsonl
+!vocab_service/storage/uploaded_vocab_cache*.json
+!vocab_service/storage/global_cache*.json
+!vocab_service/storage/*cache*.json
+!vocab_service/storage/*cache*.jsonl
+
+# 仍然明确排除体积大、可再生成的子目录（即便被上面的 *cache* 兜底误命中也不会进）
+vocab_service/storage/audio_cache/
+vocab_service/storage/run_cache/
+vocab_service/storage/out/
+vocab_service/storage/practice_audio/
+vocab_service/storage/uploaded_vocab/
+
+############################################
+# 7) Root-level safety: only allow core modules
+############################################
+
+# 先忽略所有根目录下的内容
+/*
+
+# 但放行我们明确允许的
+!/.gitignore
+!/speaking_service/
+!/vocab_service/
+!/streamlit_wrt_app/
