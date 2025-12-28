@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>单篇写作批改</title>
+  <style>
+    body { font-family: Arial, "Microsoft YaHei", sans-serif; margin: 24px; }
+    h1 { margin: 0 0 8px 0; }
+    .row { margin: 12px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    textarea { width: 100%; height: 260px; padding: 10px; font-size: 14px; }
+    select, button { padding: 8px 10px; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: 0.6; }
+    .small { color:#666; font-size: 12px; }
+    pre { background:#f6f6f6; padding:12px; overflow:auto; white-space: pre-wrap; }
+    .pill { border: 1px solid #ddd; border-radius: 999px; padding: 4px 10px; background:#fafafa; }
+    .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .card { border:1px solid #ddd; border-radius: 10px; padding: 10px; background:#fff; }
+    .label { color:#666; font-size: 12px; }
+    .value { font-size: 18px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>单篇写作批改</h1>
+  <div class="small">流程：粘贴作文 → 批改 → 显示结果 → 下载本篇反馈.docx</div>
+
+  <div class="row">
+    <select id="taskType">
+      <option value="">自动识别 Task</option>
+      <option value="Task 1">Task 1</option>
+      <option value="Task 2">Task 2</option>
+    </select>
+    <button id="gradeBtn">批改</button>
+    <button id="downloadBtn" disabled>下载本篇反馈.docx</button>
+    <span id="status" class="small"></span>
+  </div>
+
+  <textarea id="essay" placeholder="把作文粘贴到这里（换行可以保留）"></textarea>
+
+  <div id="summary" class="grid" style="display:none;"></div>
+
+  <h2 style="margin-top:16px;">反馈内容</h2>
+  <pre id="feedback"></pre>
+
+  <script>
+    const API_GRADE_TEXT = "/api/grade/text";
+    let currentReportId = null;
+
+    function setStatus(msg) {
+      document.getElementById("status").textContent = msg || "";
+    }
+
+    function showSummary(data) {
+      const summary = document.getElementById("summary");
+      summary.style.display = "grid";
+      const fields = [
+        ["Task", data.task_type],
+        ["Overall", data.overall],
+        ["TR", data.TR],
+        ["CC", data.CC],
+        ["LR", data.LR],
+        ["GRA", data.GRA],
+        ["词数", data.word_count],
+        ["段落", data.paragraph_count],
+      ];
+      summary.innerHTML = fields.map(([k,v]) => `
+        <div class="card">
+          <div class="label">${k}</div>
+          <div class="value">${(v === null || v === undefined) ? "" : v}</div>
+        </div>
+      `).join("");
+    }
+
+    document.getElementById("gradeBtn").addEventListener("click", async () => {
+      const text = document.getElementById("essay").value;
+      const task_type = document.getElementById("taskType").value || null;
+
+      currentReportId = null;
+      document.getElementById("downloadBtn").disabled = true;
+      document.getElementById("feedback").textContent = "";
+      document.getElementById("summary").style.display = "none";
+
+      if (!text.trim()) {
+        alert("请先粘贴作文内容。");
+        return;
+      }
+
+      setStatus("正在批改…");
+      document.getElementById("gradeBtn").disabled = true;
+
+      try {
+        const resp = await fetch(API_GRADE_TEXT, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ text, task_type })
+        });
+
+        let data;
+        const ct = resp.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          data = await resp.json();
+        } else {
+          const raw = await resp.text();
+          throw new Error(raw.slice(0, 300));
+        }
+
+        if (!resp.ok) {
+          setStatus("批改失败");
+          alert(data.error || JSON.stringify(data));
+          return;
+        }
+
+        currentReportId = data.report_id;
+        document.getElementById("downloadBtn").disabled = false;
+
+        showSummary(data);
+        document.getElementById("feedback").textContent = data.feedback_text || "";
+
+        setStatus("批改完成");
+
+      } catch (e) {
+        setStatus("发生错误");
+        alert(String(e));
+      } finally {
+        document.getElementById("gradeBtn").disabled = false;
+      }
+    });
+
+    document.getElementById("downloadBtn").addEventListener("click", () => {
+      if (!currentReportId) return;
+      window.location.href = `/api/grade/report/${currentReportId}`;
+    });
+  </script>
+</body>
+</html>

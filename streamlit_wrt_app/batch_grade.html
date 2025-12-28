@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IELTS 批量写作批改</title>
+  <style>
+    body { font-family: Arial, "Microsoft YaHei", sans-serif; margin: 24px; }
+    h1 { margin: 0 0 8px 0; }
+    .row { margin: 12px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    input[type="file"] { padding: 6px; }
+    select, button { padding: 8px 10px; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: 0.6; }
+
+    .small { color:#666; font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .status { margin-left: 6px; }
+
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
+    th { background: #f6f6f6; text-align: left; }
+    .ok { color: #0a7a0a; font-weight: 600; }
+    .bad { color: #b00020; font-weight: 600; }
+    .right { text-align: right; }
+    .nowrap { white-space: nowrap; }
+
+    .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px; }
+    .pill { border: 1px solid #ddd; border-radius: 999px; padding: 4px 10px; background:#fafafa; }
+    pre { background:#f6f6f6; padding:12px; overflow:auto; }
+  </style>
+</head>
+<body>
+  <h1>批量写作批改</h1>
+  <div class="small">
+    说明：先批改生成列表，再勾选导出所选反馈（zip）。
+  </div>
+
+  <div class="row">
+    <input id="files" type="file" multiple accept=".txt,.docx,.doc" />
+    <select id="taskType">
+      <option value="">自动识别 Task</option>
+      <option value="Task 1">Task 1</option>
+      <option value="Task 2">Task 2</option>
+    </select>
+    <button id="run">批量批改</button>
+    <span id="status" class="small status"></span>
+  </div>
+
+  <div class="toolbar">
+    <span class="pill small">batch_id: <span id="batchId" class="mono">-</span></span>
+    <button id="selectAll" disabled>全选</button>
+    <button id="selectNone" disabled>全不选</button>
+    <button id="exportSelected" disabled>导出所选报告（zip）</button>
+    <span id="selectedCount" class="small"></span>
+  </div>
+
+  <div id="result"></div>
+
+  <script>
+    const API_STAGE1 = "http://127.0.0.1:8003/api/grade/files";
+    const API_STAGE2 = "http://127.0.0.1:8003/api/grade/report/selected";
+
+    let currentBatchId = null;
+    let currentRows = [];   // Stage 1 results: [{file_id, filename, ok, ...}]
+    let selectedSet = new Set(); // selected file_ids
+
+    function escapeHtml(s) {
+      return (s || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+    }
+
+    function setButtonsEnabled(enabled) {
+      document.getElementById("selectAll").disabled = !enabled;
+      document.getElementById("selectNone").disabled = !enabled;
+      document.getElementById("exportSelected").disabled = !enabled;
+    }
+
+    function updateSelectedCount() {
+      const el = document.getElementById("selectedCount");
+      const total = currentRows.filter(r => r.ok).length;
+      const sel = selectedSet.size;
+      el.textContent = total ? `已选 ${sel} / ${total}（仅统计成功条目）` : "";
+      document.getElementById("exportSelected").disabled = !(currentBatchId && sel > 0);
+    }
+
+    function renderTable() {
+      const resultEl = document.getElementById("result");
+
+      if (!currentRows || currentRows.length === 0) {
+        resultEl.innerHTML = "";
+        setButtonsEnabled(false);
+        updateSelectedCount();
+        return;
+      }
+
+      // 只有有成功条目时才允许全选/全不选
+      const hasAnySuccess = currentRows.some(r => r.ok);
+      setButtonsEnabled(hasAnySuccess);
+      updateSelectedCount();
+
+      const rowsHtml = currentRows.map(item => {
+        if (!item.ok) {
+          return `
+            <tr>
+              <td class="nowrap"></td>
+              <td>${escapeHtml(item.filename)}</td>
+              <td class="bad nowrap">失败</td>
+              <td colspan="8">${escapeHtml(item.error || "")}</td>
+            </tr>
+          `;
+        }
+
+        const checked = selectedSet.has(item.file_id) ? "checked" : "";
+        return `
+          <tr>
+            <td class="nowrap">
+              <input type="checkbox" class="pick" data-id="${escapeHtml(item.file_id)}" ${checked} />
+            </td>
+            <td>${escapeHtml(item.filename)}</td>
+            <td class="ok nowrap">成功</td>
+            <td class="nowrap">${escapeHtml(item.task_type || "")}</td>
+            <td class="right">${item.overall ?? ""}</td>
+            <td class="right">${item.TR ?? ""}</td>
+            <td class="right">${item.CC ?? ""}</td>
+            <td class="right">${item.LR ?? ""}</td>
+            <td class="right">${item.GRA ?? ""}</td>
+            <td class="right">${item.word_count ?? ""}</td>
+            <td class="right">${item.paragraph_count ?? ""}</td>
+          </tr>
+        `;
+      }).join("");
+
+      resultEl.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th class="nowrap">选择</th>
+              <th>文件名</th>
+              <th class="nowrap">状态</th>
+              <th class="nowrap">Task</th>
+              <th class="right nowrap">Overall</th>
+              <th class="right nowrap">TR</th>
+              <th class="right nowrap">CC</th>
+              <th class="right nowrap">LR</th>
+              <th class="right nowrap">GRA</th>
+              <th class="right nowrap">词数</th>
+              <th class="right nowrap">段落</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      `;
+
+      // 绑定勾选事件
+      document.querySelectorAll("input.pick").forEach(cb => {
+        cb.addEventListener("change", (e) => {
+          const id = e.target.getAttribute("data-id");
+          if (!id) return;
+          if (e.target.checked) selectedSet.add(id);
+          else selectedSet.delete(id);
+          updateSelectedCount();
+        });
+      });
+
+      updateSelectedCount();
+    }
+
+    async function downloadZipFromResponse(resp, fallbackName="reports.zip") {
+      const blob = await resp.blob();
+
+      // 尝试从 Content-Disposition 解析文件名
+      let filename = fallbackName;
+      const cd = resp.headers.get("content-disposition");
+      if (cd) {
+        const m = cd.match(/filename="?([^"]+)"?/i);
+        if (m && m[1]) filename = m[1];
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("run").addEventListener("click", async () => {
+      const filesEl = document.getElementById("files");
+      const taskTypeEl = document.getElementById("taskType");
+      const statusEl = document.getElementById("status");
+      const batchIdEl = document.getElementById("batchId");
+
+      if (!filesEl.files || filesEl.files.length === 0) {
+        alert("请先选择至少一个文件（.txt 或 .docx）");
+        return;
+      }
+
+      // 清空旧状态
+      currentBatchId = null;
+      currentRows = [];
+      selectedSet.clear();
+      batchIdEl.textContent = "-";
+      renderTable();
+
+      const fd = new FormData();
+      for (const f of filesEl.files) fd.append("files", f);
+
+      const taskType = taskTypeEl.value.trim();
+      const url = taskType ? `${API_STAGE1}?task_type=${encodeURIComponent(taskType)}` : API_STAGE1;
+
+      statusEl.textContent = "正在批改中…";
+      document.getElementById("run").disabled = true;
+      setButtonsEnabled(false);
+
+      try {
+        const resp = await fetch(url, { method: "POST", body: fd });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          statusEl.textContent = `请求失败：HTTP ${resp.status}`;
+          document.getElementById("result").innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+          return;
+        }
+
+        currentBatchId = data.batch_id;
+        currentRows = data.results || [];
+        batchIdEl.textContent = currentBatchId || "-";
+
+        // 默认：把成功的都选上（你也可以改成默认不选）
+        selectedSet.clear();
+        currentRows.filter(r => r.ok).forEach(r => selectedSet.add(r.file_id));
+
+        statusEl.textContent = `完成：共 ${currentRows.length} 个文件`;
+        renderTable();
+
+      } catch (e) {
+        statusEl.textContent = "发生错误";
+        document.getElementById("result").innerHTML = `<pre>${escapeHtml(String(e))}</pre>`;
+      } finally {
+        document.getElementById("run").disabled = false;
+      }
+    });
+
+    document.getElementById("selectAll").addEventListener("click", () => {
+      selectedSet.clear();
+      currentRows.filter(r => r.ok).forEach(r => selectedSet.add(r.file_id));
+      renderTable();
+    });
+
+    document.getElementById("selectNone").addEventListener("click", () => {
+      selectedSet.clear();
+      renderTable();
+    });
+
+    document.getElementById("exportSelected").addEventListener("click", async () => {
+      const statusEl = document.getElementById("status");
+      if (!currentBatchId) {
+        alert("请先批量批改生成 batch_id");
+        return;
+      }
+      if (selectedSet.size === 0) {
+        alert("请先勾选至少一篇成功的作文");
+        return;
+      }
+
+      const payload = {
+        batch_id: currentBatchId,
+        file_ids: Array.from(selectedSet),
+      };
+
+      statusEl.textContent = "正在导出所选报告（zip）…";
+      document.getElementById("exportSelected").disabled = true;
+
+      try {
+        const resp = await fetch(API_STAGE2, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        // 若返回 JSON 错误，先解析再提示
+        const ct = resp.headers.get("content-type") || "";
+        if (!resp.ok) {
+          if (ct.includes("application/json")) {
+            const err = await resp.json();
+            statusEl.textContent = "导出失败";
+            alert(err.error || JSON.stringify(err));
+          } else {
+            statusEl.textContent = "导出失败";
+            alert(`导出失败：HTTP ${resp.status}`);
+          }
+          return;
+        }
+
+        await downloadZipFromResponse(resp, `${currentBatchId}_Reports_Selected.zip`);
+        statusEl.textContent = "已开始下载 zip";
+      } catch (e) {
+        statusEl.textContent = "导出失败";
+        alert(String(e));
+      } finally {
+        updateSelectedCount(); // 会自动恢复按钮状态
+      }
+    });
+  </script>
+</body>
+</html>
