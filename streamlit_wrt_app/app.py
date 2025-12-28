@@ -18,11 +18,14 @@ import time
 import zipfile
 from uuid import uuid4
 from typing import Any, Dict, Optional
-
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks
+from fastapi import Request
+from datetime import datetime, timezone
+import json
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from typing import List
 
 import sys
 
@@ -45,6 +48,10 @@ except Exception:
 # =========================
 
 app = FastAPI(title="IELTS Writing API")
+
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "writing"}
 
 BASE_DIR = os.path.dirname(__file__)
 REPORT_DIR = os.path.join(BASE_DIR, "reports")
@@ -71,6 +78,39 @@ MAX_BATCHES = 30
 # =========================
 # 工具函数
 # =========================
+
+def _iso_now():
+    return datetime.now(timezone.utc).isoformat()
+
+def _write_run_meta_events(run_dir: str, module: str, request: Request, run_id: str):
+    os.makedirs(run_dir, exist_ok=True)
+
+    h = request.headers
+    meta = {
+        "run_id": run_id,
+        "module": module,
+        "created_at": _iso_now(),
+        "source": "gateway",
+        "request_id": h.get("x-request-id", ""),
+        "user_key": h.get("x-user-key", "anonymous"),
+        "tags": [],
+        "billing": {
+            "plan": h.get("x-plan", "free"),
+            "paid": h.get("x-paid", "false").lower() == "true",
+            "order_id": None
+        }
+    }
+
+    meta_path = os.path.join(run_dir, "meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    events_path = os.path.join(run_dir, "events.jsonl")
+    with open(events_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(
+            {"ts": _iso_now(), "type": "run_created", "run_id": run_id, "request_id": meta["request_id"]},
+            ensure_ascii=False
+        ) + "\n")
 
 def safe_delete_file(path: str) -> None:
     try:
@@ -355,7 +395,11 @@ def grade_report_api(req: Essay, background_tasks: BackgroundTasks):
 # =========================
 
 @app.post("/api/grade/files")
-async def grade_files(files: list[UploadFile] = File(...), task_type: str | None = None):
+async def grade_files(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    task_type: str | None = None
+):
     """
     Stage 1：批量上传 -> 批改 -> 返回列表（含 batch_id + file_id）
     备注：会把每篇生成报告所需数据缓存起来，供 Stage 2 导出使用（不重复调用 DeepSeek）
@@ -418,11 +462,70 @@ async def grade_files(files: list[UploadFile] = File(...), task_type: str | None
                 "ok": False,
                 "error": f"批改失败：{e}",
             })
+    # ---------- run tracking: meta + events ----------
+    run_dir = os.path.join("storage", "run_cache_writing", batch_id)
+    os.makedirs(run_dir, exist_ok=True)
+
+    h = request.headers
+    meta = {
+        "run_id": batch_id,
+        "module": "writing",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source": "gateway",
+        "request_id": h.get("x-request-id", ""),
+        "user_key": h.get("x-user-key", "anonymous"),
+        "tags": [],
+        "billing": {
+            "plan": h.get("x-plan", "free"),
+            "paid": h.get("x-paid", "false").lower() == "true",
+            "order_id": None
+        }
+    }
+
+    with open(os.path.join(run_dir, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    with open(os.path.join(run_dir, "events.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(
+            {"ts": meta["created_at"], "type": "run_created", "run_id": batch_id, "request_id": meta["request_id"]},
+            ensure_ascii=False
+        ) + "\n")
+    # ----------------------------------------------
 
     BATCH_CACHE[batch_id] = batch
 
     return JSONResponse({"batch_id": batch_id, "results": results})
 
+class TagsUpdate(BaseModel):
+    tags: List[str]
+
+@app.post("/run/{run_id}/tags", tags=["run"])
+def update_run_tags(run_id: str, req: TagsUpdate):
+    run_dir = os.path.join("storage", "run_cache_writing", run_id)
+    meta_path = os.path.join(run_dir, "meta.json")
+    if not os.path.exists(meta_path):
+        raise HTTPException(status_code=404, detail=f"run_id not found: {run_id}")
+
+    # 读 meta
+    with open(meta_path, "r", encoding="utf-8") as f:
+        meta = json.load(f)
+
+    # 写 tags
+    meta["tags"] = req.tags
+
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    # 记事件
+    events_path = os.path.join(run_dir, "events.jsonl")
+    ts = datetime.now(timezone.utc).isoformat()
+    with open(events_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(
+            {"ts": ts, "type": "tags_updated", "run_id": run_id, "tags": req.tags},
+            ensure_ascii=False
+        ) + "\n")
+
+    return {"ok": True, "run_id": run_id, "tags": req.tags}
 
 @app.post("/api/grade/report/selected")
 def export_selected(req: ExportSelectedRequest, background_tasks: BackgroundTasks):

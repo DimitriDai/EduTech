@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EduTech Portal</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 40px; }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    a { display:block; padding:12px 14px; margin:10px 0; border:1px solid #ddd; border-radius:10px; text-decoration:none; color:#111; }
+    a:hover { background:#f6f6f6; }
+    .hint { color:#666; font-size:14px; margin-top:14px; }
+    code { background:#f2f2f2; padding:2px 6px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>EduTech 统一入口</h1>
+
+    <a href="/writing/" target="_blank">Writing 写作（FastAPI）</a>
+    <a href="/writing/single" target="_blank">Writing 单题页（/single）</a>
+    <a href="/speaking/" target="_blank">Speaking 口语（FastAPI/页面）</a>
+    <a href="/vocab/" target="_blank">Vocab 词汇（FastAPI/页面）</a>
+
+    <div class="hint">
+      后端真实端口：Writing <code>8003</code>，Speaking <code>8001</code>，Vocab <code>8000</code>。
+    </div>
+  </div>
+</body>
+</html>

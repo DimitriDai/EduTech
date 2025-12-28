@@ -36,6 +36,14 @@ logger = setup_logging()
 
 app = FastAPI(title="Vocab Service", version="0.2.0")
 
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "vocab"}
+
 from fastapi.staticfiles import StaticFiles
 import os
 

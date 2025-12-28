@@ -5,8 +5,12 @@
 import os
 import json
 import uuid
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi import Request
+
+from datetime import datetime, timezone
 
 from fastapi.staticfiles import StaticFiles
 
@@ -20,24 +24,54 @@ import json
 from modules.speaking.run_generate_answers import generate_answers_for_run
 
 from fastapi import File, UploadFile
+
 from typing import List
 import shutil
+import sys
+
+# Ensure repo root is on sys.path so `import modules...` works
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 
 # ---------- 全局配置 ----------
 APP_NAME = "IELTS Speaking Service"
 APP_VERSION = "0.1.0"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = Path(__file__).resolve().parent
 RUNS_DIR = os.path.join(BASE_DIR, "runs")
 ENABLE_EXPORT_C = os.getenv("ENABLE_EXPORT_C", "1") == "1"
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
+HAS_DEEPSEEK_KEY = False
+
 # ---------- 基础校验 ----------
+
+def _iso_now():
+    # 用 UTC 写入，最稳；展示时你再转时区
+    return datetime.now(timezone.utc).isoformat()
+
+def write_run_meta(run_dir: str, meta: dict):
+    meta_path = os.path.join(run_dir, "meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+def append_run_event(run_dir: str, event: dict):
+    path = os.path.join(run_dir, "events.jsonl")
+    event = dict(event)
+    event.setdefault("ts", _iso_now())
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
+
 def check_env():
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
-        raise RuntimeError("DEEPSEEK_API_KEY not found in environment variables")
-    return api_key
+        # 不要阻止服务启动：允许打开前端、health、docs
+        # 真正调用模型时再在对应接口里检查并返回 400
+        print("[WARN] DEEPSEEK_API_KEY not found. Speaking service will run in limited mode.")
+        return False
+    return True
 
 
 def load_config():
@@ -54,14 +88,67 @@ app = FastAPI(
     description="Independent IELTS Speaking Answer Generation Service"
 )
 
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "speaking"}
+
+class TagsUpdate(BaseModel):
+    tags: List[str]
+
+@app.post("/run/{run_id}/tags")
+def update_run_tags(run_id: str, req: TagsUpdate):
+    run_path = os.path.join(RUNS_DIR, run_id)
+    meta_path = os.path.join(run_path, "meta.json")
+    if not os.path.exists(meta_path):
+        raise HTTPException(status_code=404, detail=f"run_id not found: {run_id}")
+
+    # 读 meta
+    with open(meta_path, "r", encoding="utf-8") as f:
+        meta = json.load(f)
+
+    # 写 tags
+    meta["tags"] = req.tags
+
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    # 记事件（如果 events 不存在就创建）
+    events_path = os.path.join(run_path, "events.jsonl")
+    ts = datetime.now(timezone.utc).isoformat()
+    with open(events_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(
+            {"ts": ts, "type": "tags_updated", "run_id": run_id, "tags": req.tags},
+            ensure_ascii=False
+        ) + "\n")
+
+    return {"ok": True, "run_id": run_id, "tags": req.tags}
+
+
+from fastapi import Response
+
+@app.get("/speaking/frontend/config")
+def frontend_config():
+    # 这里先给最小可用配置；以后你要做付费/开关/限制，都从这里发
+    return {
+        "ok": True,
+        "service": "speaking",
+        "features": {
+            "batch": True,
+            "export": True
+        },
+        "limits": {
+            "max_images": 50
+        }
+    }
 
 @app.on_event("startup")
 def startup_check():
-    # 只做最基础的检查，不跑任何 AI
-    check_env()
-    os.makedirs(RUNS_DIR, exist_ok=True)
-
+    ok = check_env()
+    # 你可以把 ok 存成全局变量，之后接口用
+    global HAS_DEEPSEEK_KEY
+    HAS_DEEPSEEK_KEY = bool(ok)
 
 # ---------- Schemas ----------
 class HealthResponse(BaseModel):
@@ -76,14 +163,9 @@ class RunInitResponse(BaseModel):
 
 
 # ---------- Routes ----------
-@app.get("/speaking/health", response_model=HealthResponse)
-def health_check():
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    return HealthResponse(
-        status="ok",
-        has_api_key=bool(api_key),
-        runs_dir=RUNS_DIR
-    )
+@app.get("/speaking/health")
+def health_alias():
+    return {"ok": True, "service": "speaking"}
 
 # ---------- 上传图片接口 ----------
 class UploadImagesResponse(BaseModel):
@@ -114,13 +196,14 @@ async def upload_images(run_id: str, files: List[UploadFile] = File(...)):
 
 # ---------- 初始化口语任务接口 ----------
 @app.post("/speaking/run/init", response_model=RunInitResponse)
-def init_run():
+def init_run(request: Request):
     """
     初始化一次口语任务（对应你未来的一整套截图 → 生成 → 导出）
     """
     run_id = uuid.uuid4().hex[:16]
     run_path = os.path.join(RUNS_DIR, run_id)
 
+    # 1) 创建 run 目录结构
     os.makedirs(run_path, exist_ok=True)
     os.makedirs(os.path.join(run_path, "img"), exist_ok=True)
     os.makedirs(os.path.join(run_path, "prefill"), exist_ok=True)
@@ -129,6 +212,42 @@ def init_run():
     os.makedirs(os.path.join(run_path, "exports"), exist_ok=True)
     os.makedirs(os.path.join(run_path, "cache_override"), exist_ok=True)
 
+    # 2) run meta / event（tracking foundation）
+    def _iso_now():
+        return datetime.now(timezone.utc).isoformat()
+
+    h = request.headers
+    request_id = h.get("x-request-id", "")
+    user_key = h.get("x-user-key", "anonymous")
+    plan = h.get("x-plan", "free")
+    paid = h.get("x-paid", "false").lower() == "true"
+
+    meta = {
+        "run_id": run_id,
+        "module": "speaking",
+        "created_at": _iso_now(),
+        "source": "gateway",
+        "request_id": request_id,
+        "user_key": user_key,
+        "billing": {
+            "plan": plan,
+            "paid": paid,
+            "order_id": None
+        }
+    }
+
+    meta_path = os.path.join(run_path, "meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    events_path = os.path.join(run_path, "events.jsonl")
+    with open(events_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(
+            {"ts": _iso_now(), "type": "run_created", "run_id": run_id, "request_id": request_id},
+            ensure_ascii=False
+        ) + "\n")
+
+    # 3) 返回 run_id（保持你原来返回结构）
     return RunInitResponse(
         run_id=run_id,
         run_path=run_path
@@ -466,7 +585,7 @@ class FrontendConfig(BaseModel):
 
 from fastapi.responses import JSONResponse
 
-@app.get("/speaking/frontend/config")
+@app.get("/frontend/config")
 def frontend_config():
     return JSONResponse(
         content={"enable_export_c": ENABLE_EXPORT_C},
