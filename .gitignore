@@ -72,6 +72,7 @@ streamlit_wrt_app/out/
 streamlit_wrt_app/output/
 streamlit_wrt_app/tmp/
 streamlit_wrt_app/logs/
+streamlit_wrt_app/storage/
 
 # 你明确说的旧文件（避免误提交）
 streamlit_wrt_app/streamlit_wrt_app.py
@@ -116,3 +117,11 @@ vocab_service/output/**
 
 # 如果你把 global_cache / uploaded_vocab_cache 放在 storage 里，它会被上面规则忽略；
 # 正确做法是：代码里读取的“持久化目录”由环境变量决定，不靠 git。
+
+# runtime / generated
+streamlit_wrt_app/storage/
+**/__pycache__/
+*.log
+*.zip
+*.docx
+*.xlsx
