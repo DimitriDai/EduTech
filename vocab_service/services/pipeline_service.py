@@ -15,6 +15,7 @@ import os
 import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+from core.file_lock import file_lock
 
 from core.entry_schema import Entry
 from modules.deepseek_client import DeepSeekClient
@@ -43,7 +44,7 @@ class PipelineOutput:
 
 AUDIO_FIELDS = ("audio_primary", "audio_uk", "audio_us")
 AUDIO_QUEUE_PATH = os.path.join("storage", "missing_audio_queue.jsonl")
-
+AUDIO_QUEUE_LOCK_PATH = AUDIO_QUEUE_PATH + ".lock"
 
 def enqueue_missing_audio(entries: List[Entry]) -> None:
     """
@@ -51,22 +52,26 @@ def enqueue_missing_audio(entries: List[Entry]) -> None:
     - 不抛异常
     - 不阻塞主流程
     - 不去重（由离线脚本统一处理）
+    - 加锁：避免并发 append 写乱行/丢行
     """
     try:
         os.makedirs(os.path.dirname(AUDIO_QUEUE_PATH), exist_ok=True)
-        with open(AUDIO_QUEUE_PATH, "a", encoding="utf-8") as f:
-            for e in entries:
-                word_norm = e.word_norm
-                for accent in ("uk", "us"):
-                    field = f"audio_{accent}"
-                    if not getattr(e, field, None):
-                        record = {
-                            "word_norm": word_norm,
-                            "word_original": e.word_original,
-                            "accent": accent,
-                            "source": "pipeline_runtime",
-                        }
-                        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+        with file_lock(AUDIO_QUEUE_LOCK_PATH, timeout=30.0, poll=0.05):
+            with open(AUDIO_QUEUE_PATH, "a", encoding="utf-8") as f:
+                for e in entries:
+                    word_norm = e.word_norm
+                    for accent in ("uk", "us"):
+                        field = f"audio_{accent}"
+                        if not getattr(e, field, None):
+                            record = {
+                                "word_norm": word_norm,
+                                "word_original": e.word_original,
+                                "accent": accent,
+                                "source": "pipeline_runtime",
+                            }
+                            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.flush()
     except Exception:
         # 任何异常都吞掉，绝不影响主流程
         pass
@@ -91,7 +96,7 @@ def run_pipeline(
     3) enrich（仅文本字段）
     4) enqueue missing audio（不阻塞）
     """
-        # ===== run_id（本次 pipeline 的唯一标识）=====
+    # ===== run_id（本次 pipeline 的唯一标识）=====
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
 
     stores = stores or CacheStores(

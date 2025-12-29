@@ -15,8 +15,36 @@ import json
 import hashlib
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
+import time
+from contextlib import contextmanager
 
 SCHEMA_VERSION = "v1"  # 将来你改输出格式/规则时，改这个即可让缓存自动失效重建
+
+
+@contextmanager
+def file_lock(lock_path: str, retry: int = 50, sleep: float = 0.05):
+    """
+    简单跨请求 / 跨进程文件锁
+    - Windows / Linux 通用
+    - 用 .lock 文件占位
+    """
+    for _ in range(retry):
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.close(fd)
+            break
+        except FileExistsError:
+            time.sleep(sleep)
+    else:
+        raise RuntimeError(f"Cannot acquire lock: {lock_path}")
+
+    try:
+        yield
+    finally:
+        try:
+            os.remove(lock_path)
+        except FileNotFoundError:
+            pass
 
 
 @dataclass
@@ -59,6 +87,7 @@ class JsonlCache:
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, exist_ok=True)
         self.path = os.path.join(self.cache_dir, filename)
+        self.lock_path = self.path + ".lock"
 
         self._loaded = False
         self._index: Dict[str, Dict[str, Any]] = {}
@@ -99,18 +128,20 @@ class JsonlCache:
     def set(self, key: str, payload: Dict[str, Any]) -> None:
         self._load()
 
-        # 更新内存索引
-        self._index[key] = payload
+        # 所有“写文件”的操作，必须在同一把锁内
+        with file_lock(self.lock_path):
+            # 更新内存索引
+            self._index[key] = payload
 
-        # 追加写入 jsonl
-        rec = {"key": key, "payload": payload}
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            # 追加写入 jsonl
+            rec = {"key": key, "payload": payload}
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-        # ---------- 自动控体量（方式 A 的核心） ----------
-        max_keys = int(os.getenv("GLOBAL_CACHE_MAX_KEYS", "20000"))
-        if max_keys > 0:
-            self.compact_if_needed(max_keys=max_keys, factor=1.2)
+            # ---------- 自动控体量（方式 A 的核心） ----------
+            max_keys = int(os.getenv("GLOBAL_CACHE_MAX_KEYS", "20000"))
+            if max_keys > 0:
+                self.compact_if_needed(max_keys=max_keys, factor=1.2)
 
     # ---------- compact 相关（新增） ----------
 

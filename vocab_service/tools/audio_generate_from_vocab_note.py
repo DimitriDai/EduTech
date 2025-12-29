@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT))
 import pandas as pd
 from utils.slug import safe_filename_from_word
 from generators.excel_generator import load_entries_from_vocab_excel
-
+from core.file_lock import file_lock
 
 def env(k: str) -> str:
     v = os.getenv(k, "").strip()
@@ -93,6 +93,10 @@ def main():
             wav = out_dir / f"{slug}.wav"
             mp3 = out_dir / f"{slug}.mp3"
 
+            # 每个 (slug, acc) 一把锁
+            lock_path = out_dir / f"{slug}.lock"
+
+            # 快速复用（无需加锁）
             if not force and (mp3.exists() or wav.exists()):
                 use = mp3 if mp3.exists() else wav
                 row[acc] = {
@@ -104,16 +108,42 @@ def main():
                 continue
 
             try:
-                run_piper(piper_bin, model, word, wav)
-                if ffmpeg:
-                    try:
-                        wav_to_mp3(ffmpeg, wav, mp3)
-                        wav.unlink(missing_ok=True)
-                        use = mp3
-                    except Exception:
+                with file_lock(str(lock_path), timeout=120.0):
+                    # 进入锁后必须二次检查
+                    if not force and (mp3.exists() or wav.exists()):
+                        use = mp3 if mp3.exists() else wav
+                        row[acc] = {
+                            "ok": True,
+                            "format": use.suffix[1:],
+                            "url": f"{env('AUDIO_URL_PREFIX')}/{acc}/{use.name}",
+                        }
+                        ok += 1
+                        continue
+
+                    pid = os.getpid()
+                    wav_tmp = out_dir / f"{slug}.tmp.{pid}.wav"
+                    mp3_tmp = out_dir / f"{slug}.tmp.{pid}.mp3"
+
+                    wav_tmp.unlink(missing_ok=True)
+                    mp3_tmp.unlink(missing_ok=True)
+
+                    # 1. 生成 wav 到临时文件
+                    run_piper(piper_bin, model, word, wav_tmp)
+
+                    # 2. 转 mp3（如果有 ffmpeg）
+                    if ffmpeg:
+                        try:
+                            wav_to_mp3(ffmpeg, wav_tmp, mp3_tmp)
+                            os.replace(mp3_tmp, mp3)
+                            wav_tmp.unlink(missing_ok=True)
+                            use = mp3
+                        except Exception:
+                            os.replace(wav_tmp, wav)
+                            mp3_tmp.unlink(missing_ok=True)
+                            use = wav
+                    else:
+                        os.replace(wav_tmp, wav)
                         use = wav
-                else:
-                    use = wav
 
                 row[acc] = {
                     "ok": True,

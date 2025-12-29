@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from core.entry_schema import Entry, WordEntryGroup
 import logging
+from core.file_lock import file_lock
 
 logger = logging.getLogger(__name__)
 
@@ -202,27 +203,31 @@ class CacheRepo:
 
     def save(self) -> None:
         """
-        开发期稳定版写回：
-        - 不使用跨进程 file_lock（避免 Windows + reload 的锁残留问题）
-        - 仍保留 dirty-merge：只写本次改动的 key，尽量减少覆盖风险
-        - 依赖 app.state.pipeline_semaphore 保证同一进程内不会并发写
+        上线安全版写回：
+        - 跨请求/跨进程加锁：同一时刻只有一个写者
+        - 保留 dirty-merge：只写本次改动的 key，降低覆盖风险
+        - 仍使用原子写：tmp -> replace，避免半文件
         """
         if not self._dirty_keys:
             return
 
-        disk_data = load_json_safely(self.path)
+        lock_path = self.path + ".lock"
 
-        # 只把本次改动过的 key 写入磁盘数据
-        for k in self._dirty_keys:
-            if k in self.data:
-                disk_data[k] = self.data[k]
+        with file_lock(lock_path, timeout=60.0, poll=0.05):
+            # 锁内重新读盘：避免用旧内存覆盖别人刚写入的数据
+            disk_data = load_json_safely(self.path)
 
-        print(f"[CACHE_WRITE] path={self.path} dirty_keys={len(self._dirty_keys)}")
-        save_json_atomically(self.path, disk_data)
+            # 只把本次改动过的 key 写入磁盘数据
+            for k in self._dirty_keys:
+                if k in self.data:
+                    disk_data[k] = self.data[k]
 
-        self.data = disk_data
-        self._dirty_keys.clear()
+            print(f"[CACHE_WRITE] path={self.path} dirty_keys={len(self._dirty_keys)} lock={lock_path}")
+            save_json_atomically(self.path, disk_data)
 
+            # 更新内存快照
+            self.data = disk_data
+            self._dirty_keys.clear()
 
 # =========================
 # 多 entry tie-break（按你需求案）
