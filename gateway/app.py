@@ -2,6 +2,7 @@ import os
 import httpx
 import uuid
 from fastapi import FastAPI, HTTPException, Request
+from fastapi import UploadFile
 from fastapi.responses import FileResponse, Response
 
 app = FastAPI()
@@ -59,8 +60,8 @@ async def writing_health():
     code, data = await _proxy_get_json(f"{UPSTREAMS['writing'].rstrip('/')}/health")
     return data
 
-
 # ====== 通用代理 ======
+# ====== 通用代理（恢复版：适合 JSON/普通请求）======
 async def _proxy(request: Request, upstream_base: str, subpath: str) -> Response:
     """
     将 /{service}/{subpath} 代理到 upstream_base/{subpath}
@@ -80,7 +81,8 @@ async def _proxy(request: Request, upstream_base: str, subpath: str) -> Response
     body = await request.body()
 
     try:
-        async with httpx.AsyncClient(follow_redirects=False, timeout=60.0) as client:
+        timeout = httpx.Timeout(connect=10.0, read=600.0, write=600.0, pool=10.0)
+        async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
             r = await client.request(
                 method=request.method,
                 url=upstream_url,
@@ -88,11 +90,11 @@ async def _proxy(request: Request, upstream_base: str, subpath: str) -> Response
                 content=body,
             )
     except httpx.RequestError as e:
-        raise HTTPException(status_code=502, detail=f"Upstream request failed: {e}")
+        detail = f"{type(e).__name__}: {repr(e)}"
+        raise HTTPException(status_code=502, detail=f"Upstream request failed: {detail}")
 
-    # 过滤 hop-by-hop headers
-    excluded = {"content-encoding", "transfer-encoding", "connection", "keep-alive", "proxy-authenticate",
-                "proxy-authorization", "te", "trailers", "upgrade"}
+    excluded = {"content-encoding", "transfer-encoding", "connection", "keep-alive",
+                "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade"}
     resp_headers = {k: v for k, v in r.headers.items() if k.lower() not in excluded}
 
     return Response(
@@ -102,6 +104,55 @@ async def _proxy(request: Request, upstream_base: str, subpath: str) -> Response
         media_type=r.headers.get("content-type"),
     )
 
+async def _proxy_writing_upload(request: Request) -> Response:
+    upstream_url = UPSTREAMS["writing"].rstrip("/") + "/api/grade/files"
+
+    headers = dict(request.headers)
+    # 这些头让 httpx 自己生成，避免 multipart 出错
+    for k in ["host", "content-length", "content-type", "accept-encoding", "connection"]:
+        headers.pop(k, None)
+
+    headers.setdefault("x-request-id", str(uuid.uuid4()))
+    headers.setdefault("x-user-key", "anonymous")
+    headers.setdefault("x-plan", "free")
+    headers.setdefault("x-paid", "false")
+
+    form = await request.form()
+    items = form.getlist("files")
+
+    if not items:
+        return Response(
+            content=b'{"detail":"Field \\"files\\" is required"}',
+            status_code=422,
+            media_type="application/json",
+        )
+
+    # 重新组装 multipart：("files", (filename, bytes, content_type))
+    files = []
+    for it in items:
+        if hasattr(it, "filename") and hasattr(it, "read"):
+            data = await it.read()
+            ct = getattr(it, "content_type", None) or "application/octet-stream"
+            files.append(("files", (it.filename, data, ct)))
+
+    try:
+        timeout = httpx.Timeout(connect=10.0, read=600.0, write=600.0, pool=10.0)
+        async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
+            r = await client.post(upstream_url, headers=headers, files=files)
+    except httpx.RequestError as e:
+        detail = f"{type(e).__name__}: {repr(e)}"
+        raise HTTPException(status_code=502, detail=f"Upstream request failed: {detail}")
+
+    excluded = {"content-encoding", "transfer-encoding", "connection", "keep-alive",
+                "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade"}
+    resp_headers = {k: v for k, v in r.headers.items() if k.lower() not in excluded}
+
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        headers=resp_headers,
+        media_type=r.headers.get("content-type"),
+    )
 
 # vocab
 @app.api_route("/vocab/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
@@ -115,7 +166,10 @@ async def proxy_speaking(request: Request, path: str):
     return await _proxy(request, UPSTREAMS["speaking"], path)
 
 
-# writing
 @app.api_route("/writing/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_writing(request: Request, path: str):
+    # 只拦截批量上传接口
+    if request.method == "POST" and path == "api/grade/files":
+        return await _proxy_writing_upload(request)
+
     return await _proxy(request, UPSTREAMS["writing"], path)
