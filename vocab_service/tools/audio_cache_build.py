@@ -39,8 +39,64 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.file_lock import file_lock
+
 from utils.slug import normalize_word, safe_filename_from_word
 
+# ===== COS helpers (新增) =====
+try:
+    from qcloud_cos import CosConfig, CosS3Client
+except Exception:
+    CosConfig = None
+    CosS3Client = None
+
+
+def cos_client_or_none():
+    """
+    如果没配环境变量，就自动禁用 COS（保持原行为）
+    需要环境变量：
+      TC_SECRET_ID / TC_SECRET_KEY / COS_REGION / COS_BUCKET
+    可选：
+      COS_AUDIO_PREFIX (默认 audio_cache)
+    """
+    if CosConfig is None or CosS3Client is None:
+        return None
+
+    sid = os.getenv("TC_SECRET_ID", "").strip()
+    sk = os.getenv("TC_SECRET_KEY", "").strip()
+    region = os.getenv("COS_REGION", "").strip()
+    bucket = os.getenv("COS_BUCKET", "").strip()
+    if not (sid and sk and region and bucket):
+        return None
+
+    cfg = CosConfig(Region=region, SecretId=sid, SecretKey=sk)
+    return CosS3Client(cfg)
+
+
+def cos_key_for_audio(prefix: str, accent: str, filename: str) -> str:
+    p = (prefix or "audio_cache").strip().strip("/")
+    return f"{p}/{accent}/{filename}"
+
+
+def cos_exists(client, bucket: str, key: str) -> bool:
+    try:
+        client.head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:
+        return False
+
+
+def cos_download_to_file(client, bucket: str, key: str, local_path: Path) -> None:
+    ensure_dir(local_path.parent)
+    client.get_object_to_file(Bucket=bucket, Key=key, DestFilePath=str(local_path))
+
+
+def cos_upload_file(client, bucket: str, key: str, local_path: Path) -> None:
+    client.put_object_from_local_file(
+        Bucket=bucket,
+        LocalFilePath=str(local_path),
+        Key=key
+    )
 
 # -------------------------
 # File helpers
@@ -211,52 +267,106 @@ def ensure_audio_files(
 ) -> Dict[str, Tuple[Path, str]]:
     """
     为一个词确保音频存在，返回 {accent: (实际文件路径, 实际扩展名)}
-    - 如果 format=mp3 且没有 ffmpeg，会退化为 wav
+
+    新增 COS 逻辑（最小改动）：
+      1) 本地存在 -> 直接用
+      2) 本地不存在 -> 先查 COS，有就下载到本地再用（不生成）
+      3) COS 也没有 -> 才生成
+      4) 生成完成 -> 可选上传到 COS（若已存在则跳过，避免覆盖）
     """
     result: Dict[str, Tuple[Path, str]] = {}
+
+    # COS init（若没配置则为 None，不影响原行为）
+    cos_client = cos_client_or_none()
+    cos_bucket = os.getenv("COS_BUCKET", "").strip()
+    cos_prefix = os.getenv("COS_AUDIO_PREFIX", "audio_cache").strip() or "audio_cache"
+
     for job in jobs:
+        accent = job.name
         wav_path = job.out_dir / f"{slug}.wav"
         mp3_path = job.out_dir / f"{slug}.mp3"
+        lock_path = job.out_dir / f"{slug}.lock"
 
-        # 已存在：优先返回目标格式文件；否则返回已有 wav
+        # ---- 0) 本地命中（保持原逻辑）----
         if target_format == "mp3":
             if mp3_path.exists():
-                result[job.name] = (mp3_path, "mp3")
+                result[accent] = (mp3_path, "mp3")
                 continue
             if wav_path.exists() and not ffmpeg_bin:
-                result[job.name] = (wav_path, "wav")
+                result[accent] = (wav_path, "wav")
                 continue
         else:  # wav
             if wav_path.exists():
-                result[job.name] = (wav_path, "wav")
+                result[accent] = (wav_path, "wav")
                 continue
 
+        # ---- 1) dry-run：只计划，不下载、不生成（保持原逻辑）----
         if dry_run:
-            # dry-run 只“计划”生成
             planned_ext = "mp3" if (target_format == "mp3" and ffmpeg_bin) else "wav"
             planned_path = mp3_path if planned_ext == "mp3" else wav_path
-            result[job.name] = (planned_path, planned_ext)
+            result[accent] = (planned_path, planned_ext)
             continue
 
-        # 先合成 wav
-        synth_piper_to_wav(word_text, wav_path, job.cfg)
+        # ---- 2) / 3) / 4) 都包进文件锁 ----
+        with file_lock(str(lock_path), timeout=120.0):
 
-        if target_format == "wav":
-            result[job.name] = (wav_path, "wav")
-        else:
-            if ffmpeg_bin:
-                wav_to_mp3(ffmpeg_bin, wav_path, mp3_path)
+            # ---- 2) COS 命中：优先下载到本地 ----
+            if cos_client and cos_bucket:
+                key_mp3 = cos_key_for_audio(cos_prefix, accent, mp3_path.name)
+                key_wav = cos_key_for_audio(cos_prefix, accent, wav_path.name)
+
                 try:
-                    wav_path.unlink(missing_ok=True)
-                except TypeError:
-                    if wav_path.exists():
-                        wav_path.unlink()
-                result[job.name] = (mp3_path, "mp3")
-            else:
-                # 没有 ffmpeg 就只能用 wav
-                result[job.name] = (wav_path, "wav")
-    return result
+                    if target_format == "mp3" and cos_exists(cos_client, cos_bucket, key_mp3):
+                        cos_download_to_file(cos_client, cos_bucket, key_mp3, mp3_path)
+                        result[accent] = (mp3_path, "mp3")
+                        continue
 
+                    if cos_exists(cos_client, cos_bucket, key_wav):
+                        cos_download_to_file(cos_client, cos_bucket, key_wav, wav_path)
+
+                        if target_format == "mp3" and ffmpeg_bin:
+                            try:
+                                wav_to_mp3(ffmpeg_bin, wav_path, mp3_path)
+                                wav_path.unlink(missing_ok=True)
+                                result[accent] = (mp3_path, "mp3")
+                            except Exception:
+                                result[accent] = (wav_path, "wav")
+                        else:
+                            result[accent] = (wav_path, "wav")
+
+                        continue
+                except Exception:
+                    pass  # COS 异常，降级生成
+
+            # ---- 3) COS 没命中：本地生成 ----
+            synth_piper_to_wav(word_text, wav_path, job.cfg)
+
+            if target_format == "wav":
+                use_path, use_ext = wav_path, "wav"
+            else:
+                if ffmpeg_bin:
+                    wav_to_mp3(ffmpeg_bin, wav_path, mp3_path)
+                    try:
+                        wav_path.unlink(missing_ok=True)
+                    except TypeError:
+                        if wav_path.exists():
+                            wav_path.unlink()
+                    use_path, use_ext = mp3_path, "mp3"
+                else:
+                    use_path, use_ext = wav_path, "wav"
+
+            # ---- 4) 生成后上传 COS（存在则跳过）----
+            if cos_client and cos_bucket:
+                try:
+                    key = cos_key_for_audio(cos_prefix, accent, use_path.name)
+                    if not cos_exists(cos_client, cos_bucket, key):
+                        cos_upload_file(cos_client, cos_bucket, key, use_path)
+                except Exception:
+                    pass
+
+            result[accent] = (use_path, use_ext)
+
+    return result
 
 # -------------------------
 # Main
