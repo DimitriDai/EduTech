@@ -28,6 +28,7 @@ from api.routes_export import router as export_router
 from api.routes_practice import router as practice_router
 from api.routes_grading import router as grading_router
 from api.routes_audio import router as audio_router
+from api.routes_ocr import router as ocr_router
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -37,12 +38,6 @@ logger = setup_logging()
 app = FastAPI(title="Vocab Service", version="0.2.0")
 
 from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.get("/health")
-def health():
-    return {"ok": True, "service": "vocab"}
 
 from fastapi.staticfiles import StaticFiles
 import os
@@ -129,3 +124,4 @@ app.include_router(practice_router, prefix="/v1/practice")
 app.include_router(grading_router, prefix="/v1/grading")
 app.include_router(audio_router, prefix="/v1/audio")
 app.include_router(files_router, prefix="/v1/files")
+app.include_router(ocr_router, prefix="/v1/ocr")

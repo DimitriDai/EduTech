@@ -43,7 +43,20 @@
     <div class="row">
       <div class="col">
         <div class="muted">Passage（可留空）</div>
+        <div class="hint" style="margin-bottom:8px;">
+          OCR 上传（PDF / 图片，单文件）：<br/>
+          <input type="file"
+                id="ocrFile"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" />
+          <button class="btn" id="btnOCR" style="margin-left:8px;">
+            OCR 并追加到 Passage
+          </button>
+          <div id="ocrHint" class="muted" style="margin-top:4px;"></div>
+        </div>
         <textarea id="passage" placeholder="可留空。建议粘贴阅读文章/段落。"></textarea>
+        <div id="charCounter" class="muted" style="margin-top:6px;">
+          0 / 20000 chars
+        </div>
         <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
           <span class="muted">提取数量</span>
           <select id="countSel">
@@ -118,28 +131,49 @@
 </div>
 
 <script>
+  const $ = (id) => document.getElementById(id);
+
   // =============== Config ===============
-  const API = "http://127.0.0.1:8000";
+  const API = "http://127.0.0.1:9000";
+
+  const OCR_API = API + "/vocab/v1/ocr/passagetext";
+
+  const MAX_CHARS = 20000;
 
   const ENDPOINTS = {
-    pipeline: API + "/v1/vocab/pipeline",
-    exportVocabNote: API + "/v1/export/vocab_note",
 
-    audioGenerateFromVocabNote: API + "/v1/audio/generate_from_vocab_note",
-    audioVocabNoteCompose: API + "/v1/audio/vocab_note",
+    // ===== 核心流程 =====
+    pipeline: API + "/vocab/v1/vocab/pipeline",
 
-    practiceMaster: API + "/v1/practice/master",
-    practiceDocx: API + "/v1/practice/docx",
-    practiceComposeAudio: API + "/v1/audio/compose",
+    // ===== 词汇笔记导出 =====
+    exportVocabNote: API + "/vocab/v1/export/vocab_note",
 
-    filesList: (runId, cat) => API + `/v1/files/out/${encodeURIComponent(runId)}/${encodeURIComponent(cat)}`,
-    downloadFile: (runId, cat, fn) => API + `/v1/files/out/${encodeURIComponent(runId)}/${encodeURIComponent(cat)}/${encodeURIComponent(fn)}`,
-    categoryZip: (runId, cat, namePrefix) => {
-      const base = API + `/v1/files/out/${encodeURIComponent(runId)}/${encodeURIComponent(cat)}/zip`;
-      const p = (namePrefix && namePrefix.trim()) ? `?name_prefix=${encodeURIComponent(namePrefix)}` : "";
-      return base + p;
-    },
-  };
+    // ===== 音频相关 =====
+    audioGenerateFromVocabNote:
+      API + "/vocab/v1/audio/generate_from_vocab_note",
+    audioVocabNoteCompose:
+      API + "/vocab/v1/audio/vocab_note",
+    practiceComposeAudio:
+      API + "/vocab/v1/audio/compose",
+
+    // ===== 练习生成 =====
+    practiceMaster:
+      API + "/vocab/v1/practice/master",
+    practiceDocx:
+      API + "/vocab/v1/practice/docx",
+
+    // ===== 文件列表 / 下载 =====
+    filesList: (runId, category) =>
+      API + `/vocab/v1/files/out/${runId}/${category}`,
+
+    downloadFile: (runId, category, filename) =>
+      API +
+      `/vocab/v1/files/out/${runId}/${category}/${encodeURIComponent(filename)}`,
+
+    categoryZip: (runId, category) =>
+      API + `/vocab/v1/files/out/${runId}/${category}/zip`,
+  };   // ✅ ENDPOINTS 在这里正确结束
+
 
   const CATS = {
     vocab_note: "vocab_note",
@@ -148,10 +182,16 @@
   };
 
   // =============== DOM ===============
-  const $ = (id) => document.getElementById(id);
   const logEl = $("log");
   const runIdEl = $("runId");
   const runStatus = $("runStatus");
+  
+  const passageEl = $("passage");
+  const charCounterEl = $("charCounter");
+
+  const ocrFileEl = $("ocrFile");
+  const btnOCR = $("btnOCR");
+  const ocrHintEl = $("ocrHint");
 
   const vocabNoteArea = $("vocabNoteArea");
   const vocabNoteStatus = $("vocabNoteStatus");
@@ -176,6 +216,77 @@
   let masterXlsxPath = "";   // masterResp.output_xlsx
 
   // =============== Helpers ===============
+  function updateCharCounter() {
+    const len = (passageEl.value || "").length;
+    charCounterEl.textContent = `${len} / ${MAX_CHARS} chars`;
+    charCounterEl.style.color = (len > MAX_CHARS) ? "#dc2626" : "#6b7280";
+  }
+  passageEl.addEventListener("input", updateCharCounter);
+  updateCharCounter();
+
+  btnOCR.addEventListener("click", async () => {
+    const file = ocrFileEl.files[0];
+    if (!file) {
+      alert("请先选择一个 PDF 或图片文件");
+      return;
+    }
+
+    btnOCR.disabled = true;
+    ocrHintEl.textContent = "OCR 识别中，请稍候…";
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch(OCR_API, {
+        method: "POST",
+        body: fd
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt);
+      }
+
+      const data = await res.json();
+      const ocrText = data.passage_text || "";
+
+      const existing = passageEl.value || "";
+      const sep = existing ? "\n\n--- OCR Imported Text ---\n\n" : "";
+      const merged = existing + sep + ocrText;
+
+      if (merged.length > MAX_CHARS) {
+        const remain = MAX_CHARS - existing.length - sep.length;
+        if (remain <= 0) {
+          alert("当前内容已接近 20000 字符上限，无法追加 OCR。");
+          return;
+        }
+
+        const ok = confirm(
+          "OCR 内容会超过 20000 字符上限。\n\n" +
+          "【确定】仅追加可容纳的一部分\n" +
+          "【取消】不追加"
+        );
+
+        if (ok) {
+          passageEl.value = existing + sep + ocrText.slice(0, remain);
+        }
+      } else {
+        passageEl.value = merged;
+      }
+
+      ocrHintEl.textContent = "OCR 已完成并追加到 Passage";
+      updateCharCounter();
+
+    } catch (e) {
+      ocrHintEl.textContent = "OCR 失败";
+      alert("OCR 失败：" + e.message);
+    } finally {
+      btnOCR.disabled = false;
+      ocrFileEl.value = "";
+    }
+  });
+
   function log(msg) {
     const t = new Date().toISOString().slice(11, 19);
     logEl.value += `[${t}] ${msg}\n`;
@@ -284,7 +395,14 @@
 
   // =============== Main flow ===============
   btnRun.addEventListener("click", async () => {
+    const passageLen = (passageEl.value || "").length;
+    if (passageLen > MAX_CHARS) {
+      alert(`Passage 超过 ${MAX_CHARS} 字符上限，请精简后再运行。`);
+      return;
+    }
+
     btnRun.disabled = true;
+
     runStatus.innerHTML = `<span class="muted">运行中...</span>`;
     vocabNoteArea.innerHTML = `<div class="hint">生成中...</div>`;
     practiceArea.innerHTML = `<div class="hint">生成中...</div>`;

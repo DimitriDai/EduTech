@@ -1,9 +1,12 @@
 import os
 import httpx
 import uuid
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request
-from fastapi import UploadFile
+from fastapi import UploadFile, File
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
@@ -15,6 +18,37 @@ UPSTREAMS = {
 }
 
 PORTAL_PATH = os.getenv("PORTAL_PATH", "gateway/static/index.html")
+
+# ===========================
+# 新增：为 vocab_service 的前端提供一个“页面入口”
+# 约定：gateway 和 vocab_service 同级目录：
+#   EduTech/
+#     gateway/app.py
+#     vocab_service/frontend/index.html
+# 如果你的目录不是这样，只需要改 VOCAB_UI_DIR 这一行
+# ===========================
+BASE_DIR = Path(__file__).resolve().parent
+VOCAB_UI_DIR = BASE_DIR.parent / "vocab_service" / "frontend"
+
+# 新增：访问 http://127.0.0.1:9000/vocab-ui 打开 vocab 前端
+@app.get("/vocab-ui")
+def vocab_ui():
+    index_path = VOCAB_UI_DIR / "index.html"
+    if not index_path.exists():
+        return {
+            "ok": False,
+            "detail": "vocab ui index.html not found",
+            "expected": str(index_path),
+        }
+    return FileResponse(str(index_path))
+
+# 新增：如果 vocab 前端有 js/css 等资源（例如 <script src="...">），需要静态目录
+# 访问形式：http://127.0.0.1:9000/vocab-ui/static/xxx.js
+app.mount(
+    "/vocab-ui/static",
+    StaticFiles(directory=str(VOCAB_UI_DIR), html=False),
+    name="vocab-ui-static",
+)
 
 
 async def _proxy_get_json(url: str):
@@ -60,7 +94,7 @@ async def writing_health():
     code, data = await _proxy_get_json(f"{UPSTREAMS['writing'].rstrip('/')}/health")
     return data
 
-# ====== 通用代理 ======
+
 # ====== 通用代理（恢复版：适合 JSON/普通请求）======
 async def _proxy(request: Request, upstream_base: str, subpath: str) -> Response:
     """
@@ -93,8 +127,10 @@ async def _proxy(request: Request, upstream_base: str, subpath: str) -> Response
         detail = f"{type(e).__name__}: {repr(e)}"
         raise HTTPException(status_code=502, detail=f"Upstream request failed: {detail}")
 
-    excluded = {"content-encoding", "transfer-encoding", "connection", "keep-alive",
-                "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade"}
+    excluded = {
+        "content-encoding", "transfer-encoding", "connection", "keep-alive",
+        "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade"
+    }
     resp_headers = {k: v for k, v in r.headers.items() if k.lower() not in excluded}
 
     return Response(
@@ -103,6 +139,7 @@ async def _proxy(request: Request, upstream_base: str, subpath: str) -> Response
         headers=resp_headers,
         media_type=r.headers.get("content-type"),
     )
+
 
 async def _proxy_writing_upload(request: Request) -> Response:
     upstream_url = UPSTREAMS["writing"].rstrip("/") + "/api/grade/files"
@@ -143,8 +180,10 @@ async def _proxy_writing_upload(request: Request) -> Response:
         detail = f"{type(e).__name__}: {repr(e)}"
         raise HTTPException(status_code=502, detail=f"Upstream request failed: {detail}")
 
-    excluded = {"content-encoding", "transfer-encoding", "connection", "keep-alive",
-                "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade"}
+    excluded = {
+        "content-encoding", "transfer-encoding", "connection", "keep-alive",
+        "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade"
+    }
     resp_headers = {k: v for k, v in r.headers.items() if k.lower() not in excluded}
 
     return Response(
@@ -154,18 +193,57 @@ async def _proxy_writing_upload(request: Request) -> Response:
         media_type=r.headers.get("content-type"),
     )
 
-# vocab
+
+# vocab（API 代理，不动）
 @app.api_route("/vocab/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_vocab(request: Request, path: str):
     return await _proxy(request, UPSTREAMS["vocab"], path)
 
 
-# speaking
+# OCR 直通（保留，不动）
+@app.post("/v1/ocr/passagetext")
+async def proxy_ocr_passagetext(file: UploadFile = File(...)):
+    upstream_url = UPSTREAMS["vocab"].rstrip("/") + "/v1/ocr/passagetext"
+
+    headers = {
+        "x-request-id": str(uuid.uuid4()),
+        "x-user-key": "anonymous",
+        "x-plan": "free",
+        "x-paid": "false",
+    }
+
+    files = {
+        "file": (file.filename, file.file, file.content_type or "application/octet-stream")
+    }
+
+    try:
+        timeout = httpx.Timeout(connect=10.0, read=600.0, write=600.0, pool=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.post(upstream_url, headers=headers, files=files)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Upstream request failed: {type(e).__name__}: {e}")
+
+    excluded = {
+        "content-encoding", "transfer-encoding", "connection", "keep-alive",
+        "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade"
+    }
+    resp_headers = {k: v for k, v in r.headers.items() if k.lower() not in excluded}
+
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        headers=resp_headers,
+        media_type=r.headers.get("content-type"),
+    )
+
+
+# speaking（API 代理，不动）
 @app.api_route("/speaking/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_speaking(request: Request, path: str):
     return await _proxy(request, UPSTREAMS["speaking"], path)
 
 
+# writing（API 代理，不动）
 @app.api_route("/writing/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_writing(request: Request, path: str):
     # 只拦截批量上传接口

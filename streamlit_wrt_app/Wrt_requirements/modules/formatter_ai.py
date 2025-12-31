@@ -190,7 +190,7 @@ D) 如果一句话本来没问题：必须写【错误】=无，【修正】=无
    【修正】：xxx（如【错误】为“无”，【修正】写“无”；并严格遵守 i+1 规则）
 3) 全部句子结束后，输出：
    【段落优化】：输出一篇“可直接交卷”的完整优化稿，但【难度必须与逐句修正保持同一档，不得比逐句修正更高级】；如无需整体改写，输出“无”。
-   【优化依据】：用要点列出你做过的修改类型（例如：时态一致、冠词、搭配、连接词、避免重复等），不要长篇解释。
+   【优化依据】：用3-5个要点列出你做过的修改类型（例如：时态一致、冠词、搭配、连接词、避免重复等）写清：为什么这样改（对分数/表达的具体帮助），可以举例，但必须“少量代表性例子”：全文总共最多 2-3 个例子，避免空泛话术：不要只写“更地道/更流畅/更清晰”，必须点出具体语言点（如：从句结构、主谓一致、冠词、搭配、指代、连接词、标点断句等）
 4) 仅输出上述内容，不要寒暄。
 
 作文类型：{task_type}
@@ -725,7 +725,9 @@ def save_feedback_to_docx(
                 # 正常情况：用清洗后的修正
                 final_lines.append(clean_fix)
 
-        final_for_table = "\n".join([x for x in final_lines if x.strip()]).strip()
+        final_for_table = " ".join([re.sub(r"\s+", " ", x.strip()) for x in final_lines if x.strip()]).strip()
+        final_for_table = re.sub(r"\s+([,.;:!?])", r"\1", final_for_table)
+        final_for_table = re.sub(r"([.!?])\s{2,}", r"\1 ", final_for_table)
 
         # ② 解析失败（items 为空 / 全部为空行）=> 回退原文
         if not final_for_table:

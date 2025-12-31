@@ -1,17 +1,22 @@
+
 import os
 import sys
 import json
 import subprocess
 from pathlib import Path
 
-# ✅ 确保以脚本方式运行时也能 import 项目内模块（utils/generators 等）
-ROOT = Path(__file__).resolve().parents[2]   # vocab_service/
-sys.path.insert(0, str(ROOT))
+# ✅ 确保以脚本方式运行时也能 import 项目内模块
+# 目标：能 import vocab_service.xxx
+# audio_generate_from_vocab_note.py 的路径是：
+#   .../EduTech/vocab_service/tools/audio_generate_from_vocab_note.py
+# 所以 project root 是 parents[2] => .../EduTech
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
-from utils.slug import safe_filename_from_word
-from generators.excel_generator import load_entries_from_vocab_excel
-from core.file_lock import file_lock
+from vocab_service.utils.slug import safe_filename_from_word
+from vocab_service.generators.excel_generator import load_entries_from_vocab_excel
+from vocab_service.core.file_lock import file_lock
 
 # ===== COS (新增) =====
 try:
