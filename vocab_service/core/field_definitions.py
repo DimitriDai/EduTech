@@ -37,6 +37,7 @@ VALID_ENTRY_FIELDS: List[str] = [
     # identity
     "word_original",
     "word_norm",
+    "word_display",
     # phonetics
     "phonetic_uk",
     "phonetic_us",
@@ -93,6 +94,7 @@ FIELD_DEFS: Dict[str, FieldDef] = {
     # entry
     "word_original": FieldDef("word_original", "英文单词", "entry", required_in_output=True),
     "word_norm": FieldDef("word_norm", "规范化单词", "entry", required_in_output=False),
+    "word_display": FieldDef("word_display", "英文单词", "entry", required_in_output=False),
     "phonetic_uk": FieldDef("phonetic_uk", "英式音标", "entry", required_in_output=False),
     "phonetic_us": FieldDef("phonetic_us", "美式音标", "entry", required_in_output=False),
     "pos_cn": FieldDef("pos_cn", "中文解释", "entry", required_in_output=False),

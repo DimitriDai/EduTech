@@ -19,6 +19,7 @@ class Entry:
     # ---- 核心标识 ----
     word_original: str              # 原始英文（保留大小写 / 原样）
     word_norm: str                  # 规范化 key（小写 + 去多空格）
+    word_display: str = ""  # 展示用（大小写正确版本）；为空则回退 word_original/word_norm
 
     # ---- 发音 ----
     phonetic_uk: str = ""           # 英式音标
@@ -68,7 +69,9 @@ class Entry:
         """
         从 dict 还原 Entry（从 global_cache 读取）
         """
-        return cls(**data)
+        d = dict(data or {})
+        d.setdefault("word_display", "")
+        return cls(**d)
 
 
 # ==================================

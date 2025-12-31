@@ -12,6 +12,7 @@ from __future__ import annotations
 from core.guards import validate_inputs, normalize_and_limit_words
 
 import os
+import re
 import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
@@ -126,12 +127,19 @@ def run_pipeline(
     # 3) Enrich（只处理非音频缺失）
     enrich_items: List[EnrichItem] = []
     for m in matched:
-        if m.missing_fields:
+        mf = list(m.missing_fields or [])
+
+        # ✅ A 方案：不分辨，word_display 为空就一律交给 AI
+        if not getattr(m.entry, "word_display", ""):
+            if "word_display" not in mf:
+                mf.append("word_display")
+
+        if mf:
             enrich_items.append(
                 EnrichItem(
                     word_original=m.word_original,
                     entry=m.entry,
-                    missing_fields=m.missing_fields,
+                    missing_fields=mf,
                 )
             )
 

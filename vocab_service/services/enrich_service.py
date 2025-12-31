@@ -30,6 +30,7 @@ from services.match_service import load_json_safely  # enrich 里要重载用
 # 选择：哪些字段允许由 AI 生成
 # =========================
 AI_GENERATABLE_FIELDS = {
+    "word_display",
     "pos_cn",
     "phonetic_uk",
     "phonetic_us",
@@ -119,6 +120,7 @@ def build_enrich_prompt(word_original: str, base_entry: Entry, missing_fields: L
     context = {
         "word_original": base_entry.word_original,
         "word_norm": base_entry.word_norm,
+        "word_display": getattr(base_entry, "word_display", ""),
         "pos_cn": base_entry.pos_cn,
         "definition_en": base_entry.definition_en,
         "phonetic_uk": base_entry.phonetic_uk,
@@ -141,6 +143,7 @@ Generate ONLY the missing fields: {fields}
 Rules:
 - Output MUST be a pure JSON object (no extra text, no markdown).
 - Only include keys from the missing fields list.
+- word_display: ONLY include this key if you are confident it should be capitalized (nationality/language/proper noun). Otherwise, OMIT this key.
 - For "phonetic_uk" (and phonetic_us if requested): use IPA with slashes, e.g. "/ˈfɑːmɪŋ/".
 - For "pos_cn": concise Chinese meaning with part of speech if appropriate (e.g. "n. 碳足迹；温室气体排放量").
 - For "example": a natural IELTS-style sentence.
@@ -214,10 +217,17 @@ class EnrichService:
         if cache_mode == CacheMode.TEMP_ONLY:
             return
 
-        wn = norm_word(entry.word_original)
+        wn = entry.word_norm or norm_word(entry.word_original)
+
         group = self.global_repo.get_group(wn)
         if not group:
-            group = WordEntryGroup(word_norm=wn, word_display=entry.word_original, entries=[])
+            disp = (getattr(entry, "word_display", "") or entry.word_original or wn)
+            group = WordEntryGroup(word_norm=wn, word_display=disp, entries=[])
+
+        # ✅ 关键：如果这次 entry 有明确的 display，就更新 group 展示词
+        new_disp = (getattr(entry, "word_display", "") or "").strip()
+        if new_disp:
+            group.word_display = new_disp
 
         if not group.entries:
             group.entries.append(entry)
