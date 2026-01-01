@@ -93,7 +93,7 @@ FIELD_DEFS: Dict[str, FieldDef] = {
     "no": FieldDef("no", "No.", "placeholder", required_in_output=False),
     # entry
     "word_original": FieldDef("word_original", "英文单词", "entry", required_in_output=True),
-    "word_norm": FieldDef("word_norm", "规范化单词", "entry", required_in_output=False),
+    "word_norm": FieldDef("word_norm", "英文单词", "entry", required_in_output=False),
     "word_display": FieldDef("word_display", "英文单词", "entry", required_in_output=False),
     "phonetic_uk": FieldDef("phonetic_uk", "英式音标", "entry", required_in_output=False),
     "phonetic_us": FieldDef("phonetic_us", "美式音标", "entry", required_in_output=False),

@@ -56,7 +56,44 @@ def _load_json(path: str) -> Dict[str, Any]:
         raise FileNotFoundError(path)
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+def flatten_cache_entries_with_group_display(cache_obj: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    从 global_cache 读取时：display 在 group 层，不一定在 entry 层。
+    这里把 group.word_display 注入到 entry.word_display，保证导出层能取到。
+    """
+    out: List[Dict[str, Any]] = []
+    if not isinstance(cache_obj, dict):
+        return out
 
+    for _, group in cache_obj.items():
+        if not isinstance(group, dict):
+            continue
+
+        group_display = (group.get("word_display") or "").strip()
+        group_norm = (group.get("word_norm") or "").strip()
+
+        entries = group.get("entries", [])
+        if not isinstance(entries, list):
+            continue
+
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            e2 = dict(e)
+
+            # 注入 display：entry 没有就用 group 的
+            if not (e2.get("word_display") or "").strip():
+                if group_display:
+                    e2["word_display"] = group_display
+
+            # 顺便注入 norm：避免某些历史 entry 缺 norm
+            if not (e2.get("word_norm") or "").strip():
+                if group_norm:
+                    e2["word_norm"] = group_norm
+
+            out.append(e2)
+
+    return out
 
 def _flatten_cache_entries(cache_obj: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
@@ -69,7 +106,7 @@ def _flatten_cache_entries(cache_obj: Dict[str, Any]) -> List[Dict[str, Any]]:
     for _, group in cache_obj.items():
         if not isinstance(group, dict):
             continue
-        entries = group.get("entries", [])
+        entries = flatten_cache_entries_with_group_display(cache_obj)
         if isinstance(entries, list):
             for e in entries:
                 if isinstance(e, dict):
@@ -131,8 +168,9 @@ def _write_rows(ws: Worksheet, entries: Sequence[EntryLike], col_keys: Sequence[
                 else:
                     row.append("")
             else:
-                if k == "word_original":
-                    # 导出展示优先用 word_display（导出层生成的字段）
+                # 英文单词列：无论底层 key 是 word_original 还是 word_norm
+                # 都优先展示 word_display
+                if k in ("word_original", "word_norm"):
                     v = (
                         _get_entry_value(e, "word_display")
                         or _get_entry_value(e, "word_norm")

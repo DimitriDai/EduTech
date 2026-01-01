@@ -45,17 +45,40 @@ def export_vocab_note(req: ExportVocabNoteRequest):
         )
 
     # ===============================
+    # 1.3 读取 global_cache（用于 display 注入）
+    # ===============================
+    global_cache_path = ROOT / "storage" / "global_cache.json"
+    global_cache = {}
+    if global_cache_path.exists():
+        with global_cache_path.open("r", encoding="utf-8") as gf:
+            global_cache = json.load(gf) or {}
+
+    # ===============================
     # 1.5 生成 word_display（只用于导出，不写回 run_cache）
+    # 规则（最终版）：
+    # - display 只来自 group.word_display
+    # - fallback 到 group.word_norm
+    # - entry 不参与 display 决策
     # ===============================
     entries_for_export = []
+
     for e in entries:
-        d = dict(e)  # 浅拷贝，避免影响原始 entries
+        if not isinstance(e, dict):
+            continue
+
+        d = dict(e)  # 浅拷贝，避免污染 run_cache
+
         word_norm = (d.get("word_norm") or "").strip()
-        word_original = (d.get("word_original") or "").strip()
+        if not word_norm:
+            continue
 
-        # 展示规则：优先 word_norm；没有就回退 word_original
-        d["word_display"] = word_norm if word_norm else word_original
+        group = global_cache.get(word_norm, {})
+        if isinstance(group, dict):
+            display = (group.get("word_display") or "").strip() or word_norm
+        else:
+            display = word_norm
 
+        d["word_display"] = display
         entries_for_export.append(d)
 
     # ===============================
@@ -72,19 +95,6 @@ def export_vocab_note(req: ExportVocabNoteRequest):
         req.output_docx = str(
             build_run_category_output_path(req.run_id, CATEGORY, f"vocab_note__{req.run_id}.docx")
         )
-
-    # routes_export.py
-    # 大约在 export_vocab_note 内，生成 Excel 之前
-
-    display_mode = "norm"  # 以后可以前端传
-
-    for e in entries:
-        if display_mode == "norm":
-            e["word_display"] = e.get("word_norm") or e.get("word_original")
-        elif display_mode == "original":
-            e["word_display"] = e.get("word_original")
-        else:
-            e["word_display"] = e.get("word_norm") or e.get("word_original")
 
     # ===============================
     # 3. 生成 Excel
