@@ -221,7 +221,7 @@ class EnrichService:
 
         group = self.global_repo.get_group(wn)
         if not group:
-            disp = (getattr(entry, "word_display", "") or entry.word_original or wn)
+            disp = (getattr(entry, "word_display", "") or "").strip() or wn
             group = WordEntryGroup(word_norm=wn, word_display=disp, entries=[])
 
         # ✅ 关键：如果这次 entry 有明确的 display，就更新 group 展示词

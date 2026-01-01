@@ -69,6 +69,60 @@ def norm_word(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s.lower()
 
+def compute_word_display_simple(word_original: str, word_norm: str) -> str:
+    """
+    仅在“高度确定”时返回规范展示，否则返回空字符串。
+    """
+    wn = (word_norm or "").strip()
+    if not wn:
+        return ""
+
+    w0 = (word_original or "").strip()
+
+    UPPER = {
+        "uk": "UK",
+        "us": "US",
+        "usa": "USA",
+        "eu": "EU",
+        "un": "UN",
+        "u.k.": "UK",
+        "u.s.": "US",
+        "u.s.a.": "USA",
+    }
+    if wn in UPPER:
+        return UPPER[wn]
+
+    if wn.startswith("the "):
+        tail = wn[4:].strip()
+        if tail in UPPER:
+            return "the " + UPPER[tail]
+        if tail in ("united states", "united kingdom"):
+            return "the " + tail.title()
+
+    PROPER = {
+        "france": "France",
+        "china": "China",
+        "australia": "Australia",
+        "chinese": "Chinese",
+        "australian": "Australian",
+        "british": "British",
+        "french": "French",
+        "english": "English",
+        "american": "American",
+    }
+    if wn in PROPER:
+        return PROPER[wn]
+
+    parts = wn.split()
+    if len(parts) >= 2 and parts[0] in PROPER:
+        parts[0] = PROPER[parts[0]]
+        return " ".join(parts)
+
+    # 句首误大写（Apple -> apple）
+    if len(w0) >= 2 and w0[0].isupper() and w0[1:].islower() and wn == w0.lower():
+        return ""
+
+    return ""
 
 def _has_value(v: Any) -> bool:
     if v is None:
@@ -402,7 +456,14 @@ class MatchService:
                 chosen = chosen_from_cache
                 chosen_rule = "cache_hit_not_satisfy_no_uploaded"
             else:
-                chosen = Entry(word_original=w0, word_norm=wn, source="need_enrich", meta={})
+                wd = compute_word_display_simple(w0, wn)
+                chosen = Entry(
+                    word_original=w0,
+                    word_norm=wn,
+                    word_display=wd,
+                    source="need_enrich",
+                    meta={}
+                )
                 chosen_rule = "no_hit"
 
             miss = get_missing_fields(chosen, selected_fields)
@@ -429,7 +490,7 @@ class MatchService:
 
         group = self.global_repo.get_group(wn)
         if not group:
-            disp = (getattr(entry, "word_display", "") or entry.word_original or wn)
+            disp = (getattr(entry, "word_display", "") or "").strip() or wn
             group = WordEntryGroup(word_norm=wn, word_display=disp, entries=[])
 
         # 简化策略：global_cache 每个 word 只维护一条“主 entry”（entries[0]）
