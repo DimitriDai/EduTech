@@ -25,11 +25,52 @@ _UPPER_ABBR = {
     "u.k.": "UK",
     "u.s.": "US",
     "u.s.a.": "USA",
+    "unesco": "UNESCO",
+    "who": "WHO",
 }
 
 # 国家/国籍/语言的“高频小白名单”（你可以逐步补）
 # key 用 word_norm（小写）来比对
 _PROPER_NOUNS = {
+    "africa": "Africa",
+    "asia": "Asia",
+    "europe": "Europe",
+    "australia": "Australia",
+    "antarctica": "Antarctica",
+    "olympic": "Olympic",
+    "olympic games": "Olympic Games",
+
+    # Polar regions (adjectives)
+    "antarctic": "Antarctic",
+    "arctic": "Arctic",
+
+    # Ocean adjectives (single token)
+    "pacific": "Pacific",
+    "atlantic": "Atlantic",
+    "indian": "Indian",
+    "southern": "Southern",
+
+    # Common countries (add as you need)
+    "china": "China",
+    "france": "France",
+    "germany": "Germany",
+    "japan": "Japan",
+    "canada": "Canada",
+    "india": "India",
+    "russia": "Russia",
+
+    # Nationalities / languages (add as you need)
+    "chinese": "Chinese",
+    "australian": "Australian",
+    "british": "British",
+    "american": "American",
+    "french": "French",
+    "german": "German",
+    "japanese": "Japanese",
+    "english": "English",
+    "spanish": "Spanish",
+    "arabic": "Arabic",
+
     "france": "France",
     "china": "China",
     "australia": "Australia",
@@ -50,6 +91,29 @@ _PROPER_NOUNS = {
     "french": "French",
     "english": "English",
     "american": "American",
+
+    # Oceans
+    "pacific ocean": "Pacific Ocean",
+    "atlantic ocean": "Atlantic Ocean",
+    "indian ocean": "Indian Ocean",
+    "southern ocean": "Southern Ocean",
+    "arctic ocean": "Arctic Ocean",
+
+    # Continents / regions (multi-word)
+    "north america": "North America",
+    "south america": "South America",
+
+    # Countries / political entities (multi-word / with article)
+    "the usa": "the USA",
+    "the u.s.a.": "the USA",
+    "the united states": "the United States",
+    "the uk": "the UK",
+    "the united kingdom": "the United Kingdom",
+
+    # Treaties / agreements (explicit only; do NOT infer)
+    "antarctic treaty": "Antarctic Treaty",
+    "paris agreement": "Paris Agreement",
+    "kyoto protocol": "Kyoto Protocol",
 }
 
 
