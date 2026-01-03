@@ -200,8 +200,7 @@ def get_missing_fields(entry, selected_fields):
 # =========================
 # JSON Repo（支持坏文件/空文件）
 # =========================
-
-def load_json_safely(path: str) -> Dict[str, Any]:
+def load_json_safely(path: str) -> Any:
     if not os.path.exists(path):
         return {}
     try:
@@ -216,6 +215,21 @@ def load_json_safely(path: str) -> Dict[str, Any]:
         return {}
     except Exception:
         return {}
+
+def _normalize_repo_data(data: Any) -> Dict[str, Any]:
+    """
+    兜底：repo 期望是 dict（word_norm -> WordEntryGroup dict）。
+    如果读出来是 list / 或者是 dict 但结构不对，就返回 {}，避免 .get / from_dict 崩溃。
+    """
+    if not isinstance(data, dict):
+        return {}
+    # 快速结构探测：合法 group 至少应包含 "entries" 字段（list）
+    for _, v in list(data.items())[:5]:
+        if isinstance(v, dict) and isinstance(v.get("entries"), list):
+            return data
+        # 只要发现不是这种结构，就当成坏缓存（比如 {word: EntryDict}）
+        return {}
+    return data
 
 
 def save_json_atomically(path: str, data: Dict[str, Any]) -> None:
@@ -237,7 +251,8 @@ class CacheRepo:
 
     def __init__(self, path: str):
         self.path = path
-        self.data: Dict[str, Any] = load_json_safely(path)
+        raw = load_json_safely(path)
+        self.data: Dict[str, Any] = _normalize_repo_data(raw)
         # 只记录本次真正改动过的 key，避免用旧内存覆盖别人新写入的数据
         self._dirty_keys: set[str] = set()
 
