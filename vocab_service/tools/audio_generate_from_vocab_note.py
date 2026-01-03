@@ -120,6 +120,15 @@ def main():
     sheet_name = payload.get("sheet_name", "vocab")
     accents = payload.get("accents", ["uk", "us"])
     force = payload.get("force", False)
+    # ===== audio url prefix（统一入口）=====
+    args = type("Args", (), {})()
+    args.url_prefix = payload.get("url_prefix", "").strip()
+    
+    base_prefix = (
+        args.url_prefix
+        or os.getenv("AUDIO_URL_PREFIX", "").strip()
+        or "/static/audio"
+    ).rstrip("/")
 
     run_id = payload.get("run_id", "").strip()
 
@@ -181,7 +190,7 @@ def main():
                 row[acc] = {
                     "ok": True,
                     "format": use.suffix[1:],
-                    "url": f"{env('AUDIO_URL_PREFIX')}/{acc}/{use.name}",
+                    "url": f"{base_prefix}/{acc}/{use.name}",
                     "cache": "local_hit",
                 }
                 ok += 1
@@ -214,7 +223,7 @@ def main():
                         row[acc] = {
                             "ok": True,
                             "format": use.suffix[1:],
-                            "url": f"{env('AUDIO_URL_PREFIX')}/{acc}/{use.name}",
+                            "url": f"{base_prefix}/{acc}/{use.name}",
                             "cache": "cos_hit",
                             "cos_key": cos_key_mp3,
                         }
@@ -229,11 +238,10 @@ def main():
                             if not wav.exists():
                                 cos_download_to_file(cos_client, cos_bucket, cos_key_wav, wav)
                             use = wav
-
                         row[acc] = {
                             "ok": True,
                             "format": use.suffix[1:],
-                            "url": f"{env('AUDIO_URL_PREFIX')}/{acc}/{use.name}",
+                            "url": f"{base_prefix}/{acc}/{use.name}",
                             "cache": "cos_hit",
                             "cos_key": cos_key_wav,
                         }
@@ -304,11 +312,10 @@ def main():
                             cos_key_used = None
                     else:
                         cos_key_used = None
-
                 row[acc] = {
                     "ok": True,
                     "format": use.suffix[1:],
-                    "url": f"{env('AUDIO_URL_PREFIX')}/{acc}/{use.name}",
+                    "url": f"{base_prefix}/{acc}/{use.name}",
                     "cache": "generated",
                     "cos_key": cos_key_used,
                 }
