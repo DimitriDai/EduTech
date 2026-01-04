@@ -61,8 +61,13 @@ China-context constraints (STRICT):
 - Education references should match a Chinese high school: classes, mock exams, coursework, teachers, clubs, school events, homework load, and NO SUCH THING AS PPTS IN CLASS.
 - Avoid unrealistic Western college life, bars, or living overseas unless the question explicitly requires it.
 
+Time-context constraits (STRICT):
+- DO NOT use phrases that might be against the reality. For example, if today is January and in the answer "Well, the last time I had a few days off was during the National Day holiday last month", the "last month" will sound super weird.
+- You are allowed to use "XXX Holiday" but NOT "XXX holiday last month/week"，because these words are out of context with the real situation!
+- avoid details as such that might run counter to my current situation!
+
 Fluency (LIGHT):
-- Add a small amount of natural discourse markers (e.g., "Well," "To be honest," "I guess") but do NOT overuse.
+- Add a small amount of natural discourse markers but do NOT overuse and DO NOT keep using “Well" at the beginning!
 """.strip()
 
 import re
@@ -95,6 +100,31 @@ def _looks_complete(text: str, part: int) -> bool:
             return False
 
     return True
+
+def hard_cut_part3_after_4_dots(text: str) -> str:
+    if not text:
+        return text
+
+    paragraphs = text.split("\n\n")
+    new_paras = []
+
+    for p in paragraphs:
+        dot_count = 0
+        cut_pos = None
+
+        for i, ch in enumerate(p):
+            if ch == ".":
+                dot_count += 1
+                if dot_count == 4:
+                    cut_pos = i
+                    break
+
+        if cut_pos is not None:
+            p = p[:cut_pos + 1].rstrip()
+
+        new_paras.append(p)
+
+    return "\n\n".join(new_paras).strip()
 
 def call_deepseek_checked(prompt: str, max_tokens: int, frequency_penalty: float, part: int, temperature: float = 0.3) -> str:
     # 1st try
@@ -143,15 +173,25 @@ Hard constraints (MUST follow):
 - You must finish ALL required sections within the token limit.
 - If you feel space is limited, shorten wording and use short sentences but DO NOT omit any required section.
 - Never end mid-sentence.
-- Prioritize completeness over detail: finish the last sentence early rather than adding extra examples.
+- Don't keep adding extra examples.
 - End your output with the exact marker: <<<END>>>
 
 Output format (STRICT):
 Outline:
 - (3 bullet points, max 5 words each, key ideas only)
-Full Answer:
-- one natural spoken answer, band {band}; concise but developed; no extra sections;
-- roughly 3-4 sentences for Part 1, or 4-5 sentences for Part 3;
+
+Full Answer (Part 1优先遵从中文的prompt):
+雅思口语Part1问题回答模版：（三步走）
+1. 第一时间给出明确的回答，一般疑问句类问题就直接给出肯定否定，特殊疑问句类问题直接给出所问信息；
+2. 展开列举具体的表现，或者一句话简单解释原因；
+3. 最后给出带有个人情绪的总结发言等，比如很放松，很有意义，觉的很麻烦，或者很有收获等。
+Each answer must contain no fewer than 3 sentences and no more than 5 sentences.
+注意语言要日常口语，不需要太难的词汇，用一些英文俗语表达，给出情绪和积极交流的氛围感。
+请根据这样的模版标准帮我准备答案。
+
+雅思口语Part3问题回答:
+- one natural spoken answer, band {band}; concise; no extra sections;
+- Each answer must contain no fewer than 3 sentences and no more than 4 sentences.
 - Natural spoken style; avoid overly formal phrases and complex vocabulary;
 - Use spoken idioms, slang, and spoken discourse markers appropriately (lightly).
 
@@ -173,17 +213,19 @@ You should say:
 
 Hard constraints (MUST follow):
 - You must finish ALL required sections within the token limit.
-- If you feel space is limited, keep 13 short sentences rather than chasing 180 words.
+- If you feel space is limited, keep 18 short sentences rather than chasing 210 words.
 - Never end mid-sentence.
 - Prioritize completeness over detail: finish the last sentence early rather than adding extra examples.
 - End your output with the exact marker: <<<END>>>
 
 Requirements:
 - Outline: 4 bullet points (max 5 words each, key ideas only)
-- Full Answer: one continuous talk (target 160-180 words OR 12-14 short sentences)
+- Full Answer: one continuous talk (target 190-210 words OR 18-20 short sentences)
 - Realistic, specific details but do not drag; consistent with a Chinese high school student's life
+- 注意语言要日常口语，不需要太难的词汇，用一些英文俗语表达，给出情绪和积极交流的氛围感。
 - Natural spoken style; avoid overly formal phrases and complex vocabulary
 - Use spoken idioms, slang, and spoken discourse markers appropriately (lightly)
+- Question points can be re-ordered if needed to make the narrative flow smoothly.
 
 Output format (STRICT):
 Outline:
@@ -226,6 +268,12 @@ def generate_answer_part1_or_3(topic: str, part: int, question: str, band: str) 
     # 调用 DeepSeek 生成答案
     raw = call_deepseek_checked(prompt, max_tokens=max_tokens, frequency_penalty=0.5, part=1 if part == 1 else 3)
     parsed = parse_model_output(raw)
+
+    if part == 3:
+        parsed["full_answer"] = hard_cut_part3_after_4_dots(
+            parsed.get("full_answer", "")
+        )
+
     return {
         "topic": topic,
         "part": part,

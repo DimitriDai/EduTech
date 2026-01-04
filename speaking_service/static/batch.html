@@ -178,10 +178,12 @@
     $("runBtn").disabled = b;
     $("resetBtn").disabled = b;
     $("files").disabled = b;
+
+    // ✅ 所有 mode 一视同仁，只跟随 busy 状态
     document.querySelectorAll("input[name='mode']").forEach(r => {
-      if (r.value === "C" && $("modeCWrap").dataset.disabled === "1") r.disabled = true;
-      else r.disabled = b;
+      r.disabled = b;
     });
+
     document.querySelectorAll("input[name='bShow']").forEach(r => r.disabled = b);
     $("pageBreak").disabled = b;
     $("prefix").disabled = b;
@@ -190,9 +192,11 @@
     $("style").disabled = b;
     $("mergeAll").disabled = b;
 
-    // ✅ Teacher settings 也一并锁定，防止跑一半你误点
+    // Teacher settings
     if (forceRegenEl) forceRegenEl.disabled = b;
-    if (onlyThisRunEl) onlyThisRunEl.disabled = b || !(forceRegenEl && forceRegenEl.checked);
+    if (onlyThisRunEl) {
+      onlyThisRunEl.disabled = b || !(forceRegenEl && forceRegenEl.checked);
+    }
   }
 
   async function safeJson(resp) {
@@ -268,37 +272,30 @@
     return { show_outline: true, show_answers: true };
   }
 
+
   // =========================
-  // Feature Flag：是否允许 C
+  // Feature Flag：是否允许 C（前端强制开启版）
   // =========================
   async function loadFrontendConfig() {
+    // ✅ 前端强制开启 C：不依赖后端 /speaking/frontend/config
+    const enabled = true;
+
     try {
+      // 仍然尝试拉取配置，只做日志，不影响开关
       const cfg = await apiJson("/speaking/frontend/config", { method: "GET" });
-      const enabled = !!cfg.enable_export_c;
-
-      if (!enabled) {
-        $("modeCWrap").dataset.disabled = "1";
-        $("modeCWrap").style.opacity = "0.5";
-        $("modeC").disabled = true;
-        $("cFlag").style.display = "inline-block";
-        $("cFlag").textContent = "C 已关闭";
-        if (getMode() === "C") {
-          document.querySelector("input[name='mode'][value='A']").checked = true;
-          refreshBOptions();
-        }
-      } else {
-        $("modeCWrap").dataset.disabled = "0";
-        $("modeC").disabled = false;
-        $("cFlag").style.display = "inline-block";
-        $("cFlag").textContent = "C 可用";
-      }
-
-      logLine(`frontend/config loaded: enable_export_c=${enabled}`, "OK");
+      logLine(`frontend/config loaded (ignored): enable_export_c=${!!cfg.enable_export_c}`, "OK");
     } catch (e) {
-      $("cFlag").style.display = "inline-block";
-      $("cFlag").textContent = "config 不可用";
-      logLine(`frontend/config failed: ${e.message}`, "WARN");
+      logLine(`frontend/config failed (ignored): ${e.message}`, "WARN");
     }
+
+    // ✅ 统一按 enabled=true 走“可用”分支
+    $("modeCWrap").dataset.disabled = "0";
+    $("modeCWrap").style.opacity = "1";
+    $("modeC").disabled = false;
+    $("cFlag").style.display = "inline-block";
+    $("cFlag").textContent = "C 可用（前端强制）";
+
+    logLine(`frontend/config forced: enable_export_c=${enabled}`, "OK");
   }
 
   // =========================
@@ -314,10 +311,7 @@
     }
 
     const mode = getMode();
-    if (mode === "C" && $("modeCWrap").dataset.disabled === "1") {
-      logLine("C 已被后台禁用，请选择 A 或 B", "ERR");
-      return;
-    }
+    // ✅ 前端强制开启 C：不再做 dataset.disabled 的运行时拦截
 
     const prefix = $("prefix").value.trim() || "batch";
     const page_break = $("pageBreak").value;

@@ -345,17 +345,42 @@ def _set_doc_style(doc: Document):
     """
     统一教学讲义的基础样式（只管“好看”，不改业务逻辑）
     """
-    # Normal 字体
-    style = doc.styles["Normal"]
-    style.font.name = "等线"
-    style._element.rPr.rFonts.set(qn("w:eastAsia"), "等线")
-    style.font.size = Pt(11)
+    def _set_style_font(style_obj, font_name: str, size_pt: int, bold: bool = False):
+        # python-docx 的 style.font.name 只覆盖一部分；
+        # 为了让英文/数字/中文都稳定变成“等线”，这里把 rFonts 全部写齐
+        style_obj.font.name = font_name
+        rFonts = style_obj._element.rPr.rFonts
+        rFonts.set(qn("w:ascii"), font_name)
+        rFonts.set(qn("w:hAnsi"), font_name)
+        rFonts.set(qn("w:eastAsia"), font_name)
+        rFonts.set(qn("w:cs"), font_name)
+        style_obj.font.size = Pt(size_pt)
+        style_obj.font.bold = bold
 
-    # Normal 段落格式：行距+段前后
-    pf = style.paragraph_format
+    # Normal
+    normal = doc.styles["Normal"]
+    _set_style_font(normal, "等线", 11, bold=False)
+
+    pf = normal.paragraph_format
     pf.line_spacing = 1.15
     pf.space_before = Pt(0)
     pf.space_after = Pt(6)
+
+    # ✅ Heading 1（V-C 的 PART 1/2/3 — topic 就是 level=1）
+    if "Heading 1" in doc.styles:
+        h1 = doc.styles["Heading 1"]
+        _set_style_font(h1, "等线", 16, bold=True)
+        h1_pf = h1.paragraph_format
+        h1_pf.space_before = Pt(12)
+        h1_pf.space_after = Pt(6)
+
+    # （可选但建议）Heading 2：你 V-A/V-B 里也用到
+    if "Heading 2" in doc.styles:
+        h2 = doc.styles["Heading 2"]
+        _set_style_font(h2, "等线", 14, bold=True)
+        h2_pf = h2.paragraph_format
+        h2_pf.space_before = Pt(10)
+        h2_pf.space_after = Pt(4)
 
 # 分隔线
 
@@ -1185,10 +1210,14 @@ def add_part1_vC(
     for pi, page_items in enumerate(pages, start=1):
         _add_part_heading_vc(doc, "PART 1", topic, pi, len(pages))
 
-        for idx, item in enumerate(page_items, start=1):
+        # ✅ 全局序号 offset：保证第 2 页从 Q(VC_P1_QA_PER_PAGE+1) 开始
+        base = (pi - 1) * VC_P1_QA_PER_PAGE
+
+        for local_idx, item in enumerate(page_items, start=1):
+            q_idx = base + local_idx
             _add_q_and_answer_vc(
                 doc,
-                f"Q{idx}. {getattr(item, 'question', '')}",
+                f"Q{q_idx}. {getattr(item, 'question', '')}",
                 getattr(item, "answer", ""),
                 outline=getattr(item, "outline", ""),
                 options=opts,
@@ -1197,7 +1226,6 @@ def add_part1_vC(
         # ✅ 只在“不是最后一页”时分页；并且尊重 page_break 开关
         if opts.page_break != "none" and pi < len(pages):
             doc.add_page_break()
-
 
 def add_part3_vC(
     doc: Document,
@@ -1211,10 +1239,14 @@ def add_part3_vC(
     for pi, page_items in enumerate(pages, start=1):
         _add_part_heading_vc(doc, "PART 3", topic, pi, len(pages))
 
-        for idx, item in enumerate(page_items, start=1):
+        # ✅ 关键：全局序号 offset，保证第 2 页从 Q4 开始（若每页 3 题）
+        base = (pi - 1) * VC_P3_QA_PER_PAGE
+
+        for local_idx, item in enumerate(page_items, start=1):
+            q_idx = base + local_idx
             _add_q_and_answer_vc(
                 doc,
-                f"Q{idx}. {getattr(item, 'question', '')}",
+                f"Q{q_idx}. {getattr(item, 'question', '')}",
                 getattr(item, "answer", ""),
                 outline=getattr(item, "outline", ""),
                 options=opts,
@@ -1309,6 +1341,7 @@ def render_segment_docx_vC(seg: SegmentDoc,
         wrote_any = True
 
     ensure_dir(os.path.dirname(out_path))
+    _postprocess_docx_c_layout(doc, add_page_number=False)  # V-C 截图版：默认不加页码
     doc.save(out_path)
 
 def render_merged_docx_vC(segments: List[SegmentDoc],
@@ -1350,6 +1383,7 @@ def render_merged_docx_vC(segments: List[SegmentDoc],
             wrote_any = True
 
     ensure_dir(os.path.dirname(out_path))
+    _postprocess_docx_c_layout(doc, add_page_number=False)
 
     # 保存
     doc.save(out_path)
@@ -1577,7 +1611,7 @@ def _split_sample_answer_to_title_and_body(doc, p):
     if body:
         new_p = _insert_paragraph_after(p, body, style=doc.styles["Normal"])
         _set_paragraph_font(new_p)
-# 排版主函数
+# 排版主函数,针对V-AB
 def _postprocess_docx_layout(doc, *, keep_page_breaks: bool):
     """
     只做你要求的：
@@ -1634,3 +1668,110 @@ def _postprocess_docx_layout(doc, *, keep_page_breaks: bool):
 
     # 3) 页码（居中保留）
     _ensure_page_number_centered(doc)
+
+
+#新增排版函数 针对V-C
+# =========================
+# V-C 专用：更稳的后处理
+# - 保留分页符（run 的 page break + 段落级 pageBreakBefore）
+# - 不删除 V-C 标题（PART X — topic）
+# - 清理真正空段落、<<<END>>>、以及 * / ** 格式标记
+# - 全文统一字体：等线 11
+# =========================
+
+def _para_has_page_break_run(p) -> bool:
+    """run级分页：<w:br w:type="page"/>"""
+    for r in p.runs:
+        brs = r._r.findall(qn("w:br"))
+        for br in brs:
+            if br.get(qn("w:type")) == "page":
+                return True
+    return False
+
+def _para_has_page_break_before(p) -> bool:
+    """段落级分页：<w:pageBreakBefore/>"""
+    pPr = p._p.pPr
+    if pPr is None:
+        return False
+    return pPr.find(qn("w:pageBreakBefore")) is not None
+
+def _para_has_any_page_break(p) -> bool:
+    return _para_has_page_break_run(p) or _para_has_page_break_before(p)
+
+_STAR_EMPH_RE = re.compile(r"(\*\*|\*)([^*\n]+?)\1")  # *word* or **word**
+_MULTI_STAR_RE = re.compile(r"\*{2,}")               # ** / *** / ****
+
+def _clean_star_markers(text: str) -> str:
+    """
+    清理 * / ** 这类 markdown 强调标记：
+    - *word*  -> word
+    - **word** -> word
+    - 残留的 **/*** -> 删除
+    注意：这是“导出层”清洗，宁可保守，不做复杂语义判断。
+    """
+    s = text or ""
+    # 先去掉成对的强调
+    prev = None
+    while prev != s:
+        prev = s
+        s = _STAR_EMPH_RE.sub(r"\2", s)
+    # 再去掉残留的连续星号
+    s = _MULTI_STAR_RE.sub("", s)
+    # 去掉孤立星号（只在它作为“分隔符/装饰符”时）
+    # 规则：两侧是空白或行首/行尾
+    s = re.sub(r"(^|\s)\*(\s|$)", r"\1\2", s)
+    # 压缩多空白
+    s = re.sub(r"[ \t]{2,}", " ", s)
+    return s
+
+def _postprocess_docx_c_layout(doc: Document, *, add_page_number: bool = False):
+    """
+    V-C 专用后处理：
+    - 保留分页符（绝不删除）
+    - 删除：<<<END>>> 段落、真正空段落（但不删分页段落）
+    - 清理：* / ** 格式标记
+    - 字体：等线 11
+    - 页码：默认不加（截图版一般不要），需要则 add_page_number=True
+    """
+    i = 0
+    while True:
+        paras = _iter_paragraphs(doc)
+        if i >= len(paras):
+            break
+
+        p = paras[i]
+        txt = (p.text or "")
+
+        # 1) 删除 <<<END>>>
+        if txt.strip() == "<<<END>>>":
+            _remove_paragraph(p)
+            continue
+
+        # 2) 真正空段落：但要保留分页符段落
+        if not txt.strip():
+            if _para_has_any_page_break(p):
+                # 分页段落不能删
+                _set_paragraph_font(p)  # 顺手统一字体（即使不可见）
+                i += 1
+                continue
+            _remove_paragraph(p)
+            continue
+
+        # 3) 清理星号格式标记：逐 run 处理更安全（不破坏 runs 结构太多）
+        for r in p.runs:
+            if r.text:
+                r.text = _clean_star_markers(r.text)
+
+        # 4) 段落级再做一次（防止 run 之间拼起来出现 **）
+        #    注意：直接写 p.text 会重建 runs（会丢粗体），V-C 一般不依赖 run 级粗体
+        cleaned = _clean_star_markers(p.text)
+        if cleaned != p.text:
+            p.text = cleaned
+
+        # 5) 全段字体统一
+        _set_paragraph_font(p, name="等线", size=11)
+
+        i += 1
+
+    if add_page_number:
+        _ensure_page_number_centered(doc)

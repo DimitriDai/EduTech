@@ -212,7 +212,7 @@ def render_part23(topic: str, part2: Dict[str, Any], part3_questions: List[str],
 
         lines.append("Full Answer:")
         full3 = (ans3.get("full_answer", "") or "").strip()
-        full3 = clamp_sentences(full3, 7)       # Part 3：每题上限 7 句
+        full3 = clamp_sentences(full3, 5)       # Part 3：每题上限 5 句
         full3 = clean_llm_output(full3)
         lines.append(full3)
         lines.append("")
