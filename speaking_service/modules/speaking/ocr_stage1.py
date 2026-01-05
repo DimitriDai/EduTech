@@ -66,15 +66,24 @@ Rules:
 # -----------------------------
 
 def list_images_sorted(image_dir: str, prefix: str) -> List[str]:
-    """List images startswith prefix, sort by filename."""
+    """List images startswith prefix, sort by filename.
+    Fallback: if no files matched the prefix, use all images.
+    """
     exts = (".png", ".jpg", ".jpeg", ".webp")
     files = []
+
     for fn in os.listdir(image_dir):
         if fn.lower().endswith(exts) and fn.startswith(prefix):
             files.append(fn)
+
+    # 🔁 fallback：prefix 不匹配时，使用全部图片
+    if not files:
+        for fn in os.listdir(image_dir):
+            if fn.lower().endswith(exts):
+                files.append(fn)
+
     files.sort()
     return files
-
 
 def call_deepseek(api_key: str, prompt: str, temperature: float = 0.1, max_tokens: int = 2000) -> str:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
