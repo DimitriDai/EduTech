@@ -133,7 +133,12 @@
   const $ = (id) => document.getElementById(id);
 
   // =============== Config ===============
-  const API = "http://127.0.0.1:9000";
+  const API = window.location.origin;
+
+  const AUDIO_ROOT =
+    (API.includes("127.0.0.1") || API.includes("localhost"))
+      ? "storage/audio_cache"
+      : "/home/ubuntu/EduTech/vocab_service/storage/audio_cache";
 
   const OCR_API = API + "/vocab/v1/ocr/passagetext";
 
@@ -488,7 +493,7 @@
           run_id: currentRunId,
           vocab_excel: vocabExcelPath,
           only_sheets: "vocab",
-          audio_root: "storage/audio_cache",
+          audio_root: AUDIO_ROOT,
           ffmpeg_bin: "ffmpeg",
           ffprobe_bin: "ffprobe",
           no_manifest: false,
@@ -570,7 +575,7 @@
           make_parts: true,
           prefix: "",
           output_dir: "",
-          audio_root: "storage/audio_cache",
+          audio_root: AUDIO_ROOT,
           ffmpeg_bin: "ffmpeg",
           ffprobe_bin: "ffprobe",
           no_manifest: false
