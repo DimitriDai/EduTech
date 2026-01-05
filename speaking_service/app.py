@@ -522,27 +522,33 @@ def single_generate(req: SingleGenerateRequest):
     return SingleGenerateResponse(run_id=run_id, result=result)
 
 # ---------- 生成答案接口接入 ----------
-
 @app.post("/speaking/run/generate_answers")
 def generate_answers_api(run_id: str, force_regen: bool = False, only_for_this_run: bool = False):
     run_path = os.path.join(RUNS_DIR, run_id)
-    std_dir = os.path.join(run_path, "prefill")
+    if not os.path.isdir(run_path):
+        raise HTTPException(status_code=404, detail=f"run_id not found: {run_id}")
 
-    std_files = [f for f in os.listdir(std_dir) if f.endswith("_STD.txt")]
-    if not std_files:
-        raise HTTPException(status_code=400, detail="No *_STD.txt found for this run")
-
-    std_path = os.path.join(std_dir, std_files[0])
+    # ✅ 方案A：在生成答案前，强制确保 STD 存在（不存在就自动生成）
+    try:
+        std_path_p = _ensure_std_prefill(Path(run_path))  # returns Path
+    except FileNotFoundError as e:
+        # 比如：prefill 里连普通 txt 都没有
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        # 比如：调用 parser_prefill_txt.py 失败 / STD 为空
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        # 兜底：避免冒泡成“无信息的500”
+        raise HTTPException(status_code=500, detail=f"_ensure_std_prefill failed: {type(e).__name__}: {e}")
 
     result = generate_answers_for_run(
-        std_path=std_path,
+        std_path=str(std_path_p),
         runs_dir=RUNS_DIR,
         run_id=run_id,
         force_regen=force_regen,
         only_for_this_run=only_for_this_run,
     )
     return result
-
 # ---------- Export DOCX 接口接入 ----------
 
 from pydantic import BaseModel
