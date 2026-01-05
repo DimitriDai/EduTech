@@ -240,7 +240,16 @@ async def proxy_ocr_passagetext(file: UploadFile = File(...)):
 # speaking（API 代理，不动）
 @app.api_route("/speaking/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_speaking(request: Request, path: str):
-    return await _proxy(request, UPSTREAMS["speaking"], path)
+    resp = await _proxy(request, UPSTREAMS["speaking"], path)
+
+    # 防止 portal 端缓存 speaking 的 HTML（尤其是 batch.html）
+    # 只对 .html 生效，不影响 API JSON / 音频等资源
+    if path.lower().endswith(".html"):
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+
+    return resp
 
 
 # writing（API 代理，不动）
