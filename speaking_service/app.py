@@ -2,37 +2,39 @@
 
 # ===========================================================
 # 功能：FastAPI 应用主入口
+
 import os
+import sys
 import json
 import uuid
-from pathlib import Path
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from fastapi import Request
-
-from datetime import datetime, timezone
-
-from fastapi.staticfiles import StaticFiles
-
-from modules.speaking.rename_screenshots import rename_screenshots
-from modules.speaking.ocr_stage1 import run_stage1_ocr
-
-from modules.speaking.parser_prefill_txt import standardize_prefill_text
-from modules.speaking.parser_std import parse_std_prefill_file
-import json
-
-from modules.speaking.run_generate_answers import generate_answers_for_run
-
-from fastapi import File, UploadFile
-
-from typing import List
 import shutil
-import sys
+import subprocess
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import List
 
-# Ensure repo root is on sys.path so `import modules...` works
+# ==================================================
+# 1️⃣ 一定最先做：保证 repo root 在 sys.path 里
+# ==================================================
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+# ==================================================
+# 2️⃣ 第三方库（FastAPI / Pydantic）
+# ==================================================
+from fastapi import FastAPI, HTTPException, Request, File, UploadFile
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+# ==================================================
+# 3️⃣ 本地 modules（现在 import 一定安全）
+# ==================================================
+from modules.speaking.rename_screenshots import rename_screenshots
+from modules.speaking.ocr_stage1 import run_stage1_ocr
+from modules.speaking.parser_prefill_txt import standardize_prefill_text
+from modules.speaking.parser_std import parse_std_prefill_file
+from modules.speaking.run_generate_answers import generate_answers_for_run
 
 
 # ---------- 全局配置 ----------
@@ -318,6 +320,49 @@ def speaking_stage1_ocr(req: OCRRequest):
     return result
 
 # ---------- 解析 prefill 接口接入 ---------- 
+def _ensure_std_prefill(run_dir: Path) -> Path:
+    """
+    Ensure a *_STD.txt exists under run_dir/prefill.
+    If not, generate it by calling parser_prefill_txt.py on the newest non-STD txt.
+    Returns the STD path.
+    """
+    prefill_dir = run_dir / "prefill"
+    prefill_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1) Prefer newest *_STD.txt
+    std_files = sorted(prefill_dir.glob("*_STD.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if std_files:
+        return std_files[0]
+
+    # 2) Find newest normal prefill txt (exclude *_STD.txt)
+    txt_files = [p for p in prefill_dir.glob("*.txt") if not p.name.endswith("_STD.txt")]
+    txt_files = sorted(txt_files, key=lambda p: p.stat().st_mtime, reverse=True)
+    if not txt_files:
+        raise FileNotFoundError(f"No prefill txt found under {prefill_dir}")
+
+    src = txt_files[0]
+    dst = src.with_name(src.stem + "_STD.txt")
+
+    script_path = Path(__file__).resolve().parent / "modules" / "speaking" / "parser_prefill_txt.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"parser_prefill_txt.py not found: {script_path}")
+
+    # 3) Generate STD by calling the existing script (minimal coupling)
+    cmd = [sys.executable, str(script_path), "--input", str(src), "--output", str(dst)]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode != 0:
+        raise RuntimeError(
+            "STD generate failed.\n"
+            f"cmd: {' '.join(cmd)}\n"
+            f"stdout:\n{p.stdout}\n"
+            f"stderr:\n{p.stderr}\n"
+        )
+
+    if not dst.exists() or dst.stat().st_size == 0:
+        raise RuntimeError(f"STD generated but file is empty: {dst}")
+
+    return dst
+
 @app.post("/speaking/stage2/parse")
 def speaking_stage2_parse(run_id: str):
     """
@@ -329,20 +374,18 @@ def speaking_stage2_parse(run_id: str):
     if not os.path.isdir(prefill_dir):
         raise HTTPException(status_code=404, detail="prefill directory not found")
 
-    # 找 prefill txt（默认只有一个）
-    txt_files = [
-        f for f in os.listdir(prefill_dir)
-        if f.lower().endswith(".txt")
-    ]
-    if not txt_files:
-        raise HTTPException(status_code=400, detail="no prefill txt found")
+    prefill_dir_p = Path(prefill_dir)
 
-    prefill_path = os.path.join(prefill_dir, txt_files[0])
+    try:
+        # ✅ 关键点：传 run_path，而不是 prefill_dir
+        std_path = _ensure_std_prefill(Path(run_path))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # ✅ 核心：调用 parser
-    result = parse_std_prefill_file(prefill_path)
+    result = parse_std_prefill_file(str(std_path))
 
-    # 输出 JSON，供 generator 使用
     out_path = os.path.join(prefill_dir, "parsed.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
@@ -350,7 +393,7 @@ def speaking_stage2_parse(run_id: str):
     return {
         "run_id": run_id,
         "segments": len(result.get("segments", [])),
-        "output": out_path
+        "output": out_path,
     }
 
 # ---------- 单题生成接口接入 ----------
@@ -467,8 +510,8 @@ def single_generate(req: SingleGenerateRequest):
     if not text:
         raise HTTPException(status_code=400, detail="question_text is empty")
 
-    # 这里用你已 import 的 normalize_prefill_txt（你现在 app.py 已 import）:contentReference[oaicite:8]{index=8}
-    cleaned = normalize_prefill_txt(text)
+    # 这里用你已 import 的 standardize_prefill_txt（你现在 app.py 已 import）:contentReference[oaicite:8]{index=8}
+    cleaned = standardize_prefill_txt(text)
 
     with open(std_path, "w", encoding="utf-8") as f:
         f.write(cleaned)
@@ -586,7 +629,7 @@ class FrontendConfig(BaseModel):
 from fastapi.responses import JSONResponse
 
 @app.get("/frontend/config")
-def frontend_config():
+def frontend_config_root():
     return JSONResponse(
         content={"enable_export_c": ENABLE_EXPORT_C},
         headers={"Cache-Control": "max-age=300"}
