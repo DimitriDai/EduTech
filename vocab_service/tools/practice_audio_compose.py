@@ -280,33 +280,58 @@ def load_rows_from_json(json_path: str) -> List[RowItem]:
 # =========================
 # URL -> 本地文件映射
 # =========================
+from urllib.parse import urlparse
 
-def url_to_local_mp3(audio_url: str, audio_root: str) -> Optional[str]:
+def url_to_local_audio(audio_url: str, audio_root: str):
     """
     支持：
-    - /static/audio/uk/xxx.mp3
-    - /static/audio/us/xxx.mp3
-    - uk/xxx.mp3
-    - us/xxx.mp3
+    - mp3 / wav
+    - uk / us
+    - URL / 相对路径 / 绝对路径
     """
-    u = (audio_url or "").strip()
-    if not u:
+    s = (audio_url or "").strip()
+    if not s:
         return None
-    u = u.replace("\\", "/")
 
-    if "/uk/" in u:
-        tail = u.split("/uk/", 1)[1]
-        return os.path.join(audio_root, "uk", tail)
-    if "/us/" in u:
-        tail = u.split("/us/", 1)[1]
-        return os.path.join(audio_root, "us", tail)
+    s = s.replace("\\", "/")
 
-    if u.startswith("uk/") or u.startswith("us/"):
-        return os.path.join(audio_root, u.replace("/", os.sep))
+    # URL -> path（去掉 query）
+    if "://" in s:
+        try:
+            s = urlparse(s).path
+        except Exception:
+            pass
+    s = s.split("?", 1)[0]
 
-    # 如果你未来把 audio_primary 存成本地绝对路径，也能工作
-    if os.path.isabs(u) and os.path.exists(u):
-        return u
+    def pick_existing(p: str):
+        if os.path.exists(p) and os.path.getsize(p) > 0:
+            return p
+        base, ext = os.path.splitext(p)
+        if ext.lower() == ".mp3":
+            alt = base + ".wav"
+            if os.path.exists(alt):
+                return alt
+        if ext.lower() == ".wav":
+            alt = base + ".mp3"
+            if os.path.exists(alt):
+                return alt
+        return None
+
+    # uk / us 优先
+    if "/uk/" in s:
+        tail = s.split("/uk/", 1)[1]
+        return pick_existing(os.path.join(audio_root, "uk", tail))
+
+    if "/us/" in s:
+        tail = s.split("/us/", 1)[1]
+        return pick_existing(os.path.join(audio_root, "us", tail))
+
+    if s.startswith("uk/") or s.startswith("us/"):
+        return pick_existing(os.path.join(audio_root, s))
+
+    # 绝对路径兜底
+    if os.path.isabs(s):
+        return pick_existing(s)
 
     return None
 
@@ -337,7 +362,7 @@ def compose_full_mp3(
     # 找到第一条可用 mp3 用来探测 sr/ch
     first_local = None
     for r in rows:
-        local = url_to_local_mp3(r.audio_primary, audio_root)
+        local = url_to_local_audio(r.audio_primary, audio_root)
         if local and os.path.exists(local):
             first_local = local
             break
@@ -371,7 +396,7 @@ def compose_full_mp3(
         dur_cache: Dict[str, int] = {}
         with open(concat_txt, "w", encoding="utf-8") as f:
             for r in rows:
-                local = url_to_local_mp3(r.audio_primary, audio_root)
+                local = url_to_local_audio(r.audio_primary, audio_root)
                 if (not local) or (not os.path.exists(local)):
                     skipped += 1
                     continue
