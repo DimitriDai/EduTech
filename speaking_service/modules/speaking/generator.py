@@ -6,7 +6,7 @@
 # 关键约束（已写死）：
 # - Persona: 中国高中学生（在中国杭州）
 # - 细节：地点/社交媒体/教育体系符合中国国情
-# - 人名：PERSON'S NAME 占位符
+# - 人名：PERSON'S NAME 占位符(暂定Liu or Zhang)
 # - 输出：Outline + Full Answer（顺序固定）
 # ============================================================
 
@@ -53,7 +53,7 @@ PERSONA_BLOCK = """
 Persona (STRICT):
 - You are a Chinese high school student studying in Hangzhou, China, preparing for IELTS exam.
 - You speak in first-person ("I / my").
-- If you need to mention another person's name, use exactly: PERSON'S NAME (do not invent real names).
+- If you need to mention another person's name, use exactly: Liu or Zhang (do not invent real names).
 
 China-context constraints (STRICT):
 - Examples must be realistic in China: cities, neighborhoods, public places, school routines.
