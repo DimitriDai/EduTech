@@ -14,7 +14,7 @@ app = FastAPI()
 UPSTREAMS = {
     "vocab": os.getenv("VOCAB_URL", "http://127.0.0.1:8000"),
     "speaking": os.getenv("SPEAKING_URL", "http://127.0.0.1:8001"),
-    "writing": os.getenv("WRITING_URL", "http://127.0.0.1:8003"),
+    "writing": os.getenv("WRITING_URL", "http://127.0.0.1:8002"),
 }
 
 PORTAL_PATH = os.getenv("PORTAL_PATH", "gateway/static/index.html")
