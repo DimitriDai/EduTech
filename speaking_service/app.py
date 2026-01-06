@@ -287,8 +287,8 @@ class OCRRequest(BaseModel):
     # 可选：你也可以直接传一个外部图片目录（不放进 runs/img）
     image_dir: Optional[str] = None
     # 可选：若你本机 tesseract 需要写死路径
-    tesseract_cmd: Optional[str] = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    tessdata_prefix: Optional[str] = r"C:\Program Files\Tesseract-OCR\tessdata"
+    tesseract_cmd: Optional[str] = (r"C:\Program Files\Tesseract-OCR\tesseract.exe" if sys.platform.startswith("win") else None)
+    tessdata_prefix: Optional[str] = (r"C:\Program Files\Tesseract-OCR\tessdata" if sys.platform.startswith("win") else None)
 
 @app.post("/speaking/stage1/ocr")
 def speaking_stage1_ocr(req: OCRRequest):
