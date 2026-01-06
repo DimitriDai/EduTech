@@ -619,6 +619,22 @@ def _pick_dim_scores_for_docx(band: dict):
 
     return TR, CC, LR, GRA, overall
 
+def _postprocess_docx_layout_simple(doc):
+    """
+    Writing 专用：
+    - 不删段落
+    - 不动分页
+    - 不处理 Outline / Sample Answer
+    - 只统一字体：等线 + 11
+    """
+    from docx.shared import Pt
+    from docx.oxml.ns import qn
+
+    for p in doc.paragraphs:
+        for r in p.runs:
+            r.font.name = "等线"
+            r.font.size = Pt(11)
+            r._element.rPr.rFonts.set(qn("w:eastAsia"), "等线")
 
 def save_feedback_to_docx(
     feedback_text: str,
@@ -812,5 +828,6 @@ def save_feedback_to_docx(
             doc.add_paragraph(f"   错误：{err}")
             doc.add_paragraph("   正确句子：______________________________")
 
+    _postprocess_docx_layout_simple(doc)
     doc.save(output_path)
     return output_path
