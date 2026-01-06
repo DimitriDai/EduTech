@@ -287,8 +287,13 @@ def run_stage1_ocr(
       - recognized txt files (per image)
       - 预填 prefill txt
     """
-    if tesseract_cmd:
+
+    import sys
+    
+    # 仅在 Windows 下才强制指定 tesseract 路径
+    if tesseract_cmd and sys.platform.startswith("win"):
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+
     if tessdata_prefix:
         os.environ["TESSDATA_PREFIX"] = tessdata_prefix
 
