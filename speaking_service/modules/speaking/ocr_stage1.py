@@ -265,6 +265,71 @@ def call_deepseek_fix_topic(api_key: str, prefill_text: str) -> str:
     return normalize_text(fixed)
 
 
+def ensure_part_markers(prefill: str) -> str:
+    """
+    ✅ 结构兜底：即使 OCR/DeepSeek 漏掉了 'Part 2/Part 3' 行，也能补回
+    规则：
+    - 出现 Describe... => 在其前插入 Part 2（若缺）
+    - 出现编号题 1./2./3. 且前面有 Part2/CUE/BULLET 信号 => 在第一道编号题前插 Part 3（若缺）
+    - 若只有编号题且没有 Describe/Part2 => 视为 Part 1（在 topic 后插入 Part 1）
+    """
+    lines = [ln.rstrip() for ln in prefill.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    # 去掉首尾纯空行，但保留中间空行
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    def has_part(n: int) -> bool:
+        return any(re.match(rf"^\s*Part\s*{n}\b", ln, re.I) for ln in lines)
+
+    def is_num_q(ln: str) -> bool:
+        return re.match(r"^\s*\d{1,2}\s*[\.\)]\s+\S", ln) is not None
+
+    # 找 Describe / You should say / 第一条编号题
+    idx_describe = next((i for i, ln in enumerate(lines) if re.match(r"^\s*Describe\b", ln, re.I)), None)
+    idx_you_should = next((i for i, ln in enumerate(lines) if re.match(r"^\s*You should say\s*:?\s*$", ln, re.I)), None)
+    idx_first_num = next((i for i, ln in enumerate(lines) if is_num_q(ln)), None)
+
+    # (1) Part 2
+    if idx_describe is not None and (not has_part(2)):
+        lines.insert(idx_describe, "Part 2")
+        # 插入后重新找编号题位置（避免偏移误差）
+        idx_first_num = next((i for i, ln in enumerate(lines) if is_num_q(ln)), None)
+
+    # (2) Part 3
+    def seen_p2_signal_before(idx: int) -> bool:
+        if idx is None:
+            return False
+        before = "\n".join(lines[:idx])
+        return bool(re.search(r"^\s*Part\s*2\b", before, re.I | re.M)) or \
+               bool(re.search(r"^\s*Describe\b", before, re.I | re.M)) or \
+               (idx_you_should is not None and idx_you_should < idx)
+
+    if idx_first_num is not None and (not has_part(3)) and seen_p2_signal_before(idx_first_num):
+        lines.insert(idx_first_num, "Part 3")
+
+    # (3) Part 1（只有编号题、没有 Describe/Part2 时）
+    # 典型：P1 题卡 OCR 输出只有 topic + 1..4 问题
+    idx_describe2 = next((i for i, ln in enumerate(lines) if re.match(r"^\s*Describe\b", ln, re.I)), None)
+    idx_first_num2 = next((i for i, ln in enumerate(lines) if is_num_q(ln)), None)
+    if idx_first_num2 is not None and idx_describe2 is None and (not has_part(1)) and (not has_part(2)):
+        insert_at = 1 if len(lines) >= 1 else 0  # 默认第 1 行是 topic
+        lines.insert(insert_at, "Part 1")
+
+    # 压缩多余空行：最多保留 1 个连续空行
+    out = []
+    blank = 0
+    for ln in lines:
+        if ln.strip():
+            blank = 0
+            out.append(ln.strip())
+        else:
+            blank += 1
+            if blank <= 1:
+                out.append("")
+    return ("\n".join(out)).strip() + "\n"
+
 # -----------------------------
 # Main entry used by API layer
 # -----------------------------
@@ -321,6 +386,9 @@ def run_stage1_ocr(
 
             # ✅ 交给 DeepSeek 做标题兜底 + 清空行（你要的“自行修改”就在这里）
             cleaned = call_deepseek_fix_topic(api_key, cleaned)
+            
+            # ✅ 结构兜底：补回 Part 1/2/3 行（防止 OCR/DeepSeek 漏标签导致下游 parser 丢内容）
+            cleaned = ensure_part_markers(cleaned)
 
             out_name = os.path.splitext(filename)[0] + "-已识别.txt"
             out_path = os.path.join(image_dir, out_name)

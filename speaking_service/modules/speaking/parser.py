@@ -26,7 +26,7 @@ def parse_prefill(text: str) -> List[Dict[str, Any]]:
     cur = None
     cur_part = None
 
-    part_pat = re.compile(r"^part\s*[123]$", re.I)
+    part_pat = re.compile(r"^part\s*([123])\s*[:：]?\s*$", re.I)
 
     def start_topic(title: str):
         nonlocal cur, cur_part

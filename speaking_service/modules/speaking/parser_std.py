@@ -66,6 +66,9 @@ def looks_like_title(ln: str) -> bool:
         return False
     if re.search(r"\b(202\d|20\d{2})\b", ln):
         return False
+    # ✅ 禁止 bullet 行被识别为标题（关键！）
+    if ln.lstrip().startswith("-"):
+        return False
     if is_part_line(ln) is not None:
         return False
     # 排除明显的 cue 句（但允许作为兜底 title 的情况，在外面做）
@@ -91,14 +94,18 @@ def convert_prefill_to_std(prefill_path: str) -> str:
     in_part2_you_should_say = False
     part2_cue_written = False
 
+    # 记录 out 里 TOPIC: 行的索引，方便在 Part2 进入时覆盖修正
+    topic_out_idx: Optional[int] = None
+
     def start_new_segment(topic: str):
-        nonlocal seg_id, cur_topic, cur_part, in_part2_you_should_say, part2_cue_written
+        nonlocal seg_id, cur_topic, cur_part, in_part2_you_should_say, part2_cue_written, topic_out_idx
         seg_id += 1
-        cur_topic = topic.strip()
+        cur_topic = (topic or "").strip()
         cur_part = None
         in_part2_you_should_say = False
         part2_cue_written = False
         out.append(f"SEGMENT: {seg_id}")
+        topic_out_idx = len(out)
         out.append(f"TOPIC: {cur_topic}")
 
     # 简单 lookahead：判断某行是不是 “标题行”，条件是：它后面不远处出现 Part 1/2
@@ -106,6 +113,33 @@ def convert_prefill_to_std(prefill_path: str) -> str:
         for k in range(idx + 1, len(lines)):
             if lines[k].strip():
                 return lines[k].strip()
+        return None
+
+    # 向上找“最近的中文/英文标题行”，用于强制 Part2/Part1 的标题规则
+    def find_prev_title(idx: int, want_chinese: bool) -> Optional[str]:
+        for k in range(idx - 1, -1, -1):
+            s = (lines[k] or "").strip()
+            if not s:
+                continue
+
+            # 排除 Part 行、Describe cue、You should say、以及 bullet 行
+            if is_part_line(s) is not None:
+                continue
+            if s.lower().startswith("describe "):
+                continue
+            if s.lower().startswith("you should say"):
+                continue
+            if s.lstrip().startswith("-"):
+                continue
+
+            # 只选“看起来像标题”的行
+            if not looks_like_title(s):
+                continue
+
+            if want_chinese and is_chinese_text(s):
+                return s
+            if (not want_chinese) and (not is_chinese_text(s)):
+                return s
         return None
 
     i = 0
@@ -122,10 +156,35 @@ def convert_prefill_to_std(prefill_path: str) -> str:
             cur_part = p
             out.append(f"PART: {p}")
 
-            # 进入 Part2 时，重置 Part2 状态
+            # Part 2：强制 TOPIC = 最近中文标题（且必须覆盖已写入 out 的 TOPIC 行）
             if p == 2:
                 in_part2_you_should_say = False
                 part2_cue_written = False
+
+                bad_topic = (
+                    (cur_topic is None)
+                    or (not cur_topic.strip())
+                    or cur_topic.lstrip().startswith("-")
+                    or cur_topic.lower().startswith("describe ")
+                    or (not is_chinese_text(cur_topic))
+                )
+                if bad_topic:
+                    prev_cn = find_prev_title(i, want_chinese=True)
+                    if prev_cn:
+                        cur_topic = prev_cn.strip()
+                        if topic_out_idx is not None:
+                            out[topic_out_idx] = f"TOPIC: {cur_topic}"
+
+            # Part 1：强制 TOPIC = 最近英文标题（如果你要这个硬规则）
+            if p == 1:
+                bad_topic = (cur_topic is None) or (not cur_topic.strip()) or is_chinese_text(cur_topic)
+                if bad_topic:
+                    prev_en = find_prev_title(i, want_chinese=False)
+                    if prev_en:
+                        cur_topic = prev_en.strip()
+                        if topic_out_idx is not None:
+                            out[topic_out_idx] = f"TOPIC: {cur_topic}"
+
             i += 1
             continue
 
@@ -133,9 +192,23 @@ def convert_prefill_to_std(prefill_path: str) -> str:
         #    规则：当前行像标题，并且下一非空行是 Part 1/2
         if looks_like_title(ln):
             nxt = find_next_nonempty(i)
-            if nxt and is_part_line(nxt) in (1, 2):
-                # 新 segment
-                start_new_segment(ln)
+            part = is_part_line(nxt) if nxt else None
+            if part in (1, 2):
+                topic_line = ln
+
+                # Part 2：标题必须中文 -> 向上回溯最近中文
+                if part == 2 and (not is_chinese_text(topic_line)):
+                    prev_cn = find_prev_title(i, want_chinese=True)
+                    if prev_cn:
+                        topic_line = prev_cn
+
+                # Part 1：标题必须英文 -> 向上回溯最近英文
+                if part == 1 and is_chinese_text(topic_line):
+                    prev_en = find_prev_title(i, want_chinese=False)
+                    if prev_en:
+                        topic_line = prev_en
+
+                start_new_segment(topic_line)
                 i += 1
                 continue
 
@@ -164,17 +237,16 @@ def convert_prefill_to_std(prefill_path: str) -> str:
                 i += 1
                 continue
 
-            # ✅ 修复关键：只要还在 Part2，并且已经 seen "You should say:"
+            # 只要还在 Part2，并且已经 seen "You should say:"
             # 那么直到遇到 Part 3 之前的所有“非空非 cue”行，全部当 BULLET
             if in_part2_you_should_say:
-                # 有些版本 bullet 会以 "- " 开头，这里统一去掉前缀但保留文本
                 b = re.sub(r"^\-\s*", "", ln).strip()
                 if b:
                     out.append(f"BULLET: {b}")
                 i += 1
                 continue
 
-            # Part2 里偶尔还会出现未加 "-" 的 bullet（而且 You should say 可能 OCR 丢了）
+            # Part2 里偶尔还会出现未加 "-" 的 bullet（且 You should say 可能 OCR 丢了）
             # 兜底：如果 cue 已写入且当前行不是 Part 行，也不是空，就当 bullet
             if part2_cue_written and (is_part_line(ln) is None):
                 b = re.sub(r"^\-\s*", "", ln).strip()
@@ -200,7 +272,6 @@ def convert_prefill_to_std(prefill_path: str) -> str:
                 i += 1
                 continue
 
-        # 其它情况：忽略（或你以后想打日志也可以）
         i += 1
 
     # 输出 STD 文件路径
@@ -210,7 +281,6 @@ def convert_prefill_to_std(prefill_path: str) -> str:
         f.write("\n".join(out).strip() + "\n")
 
     return std_path
-
 
 # ============================
 # Compatibility: run_generate_answers.py expects this function

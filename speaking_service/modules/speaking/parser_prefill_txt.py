@@ -127,6 +127,11 @@ def is_banned_as_topic(line: str) -> bool:
         return True
     if re.match(r"^Describe\b", s, re.I):
         return True
+        # ✅ bullet 行绝不允许当 topic
+    if re.match(r"^[\-•]\s+", s):
+        return True
+    if re.match(r"^(When|Where|Who|Whom|What|How|Why|And)\b", s, re.I):
+        return True
     # 看起来像 question，就不要当 topic
     if looks_like_question(strip_question_number(s)):
         return True
@@ -224,8 +229,11 @@ def standardize_prefill_text(raw_text: str) -> str:
 
         is_part, pnum = is_part_line(ln)
         if is_part:
-            # 识别 topic（在 Part 附近找标题行）
-            topic_found = find_topic_around(lines, i)
+            # ✅ Part 3 必须沿用 Part 2 的 topic，不能重新找（否则会抓到 bullet 覆盖）
+            if pnum == 3:
+                topic_found = current_topic
+            else:
+                topic_found = find_topic_around(lines, i)
 
             # 何时开启新 segment？
             # - 遇到 Part 1，如果当前 segment 已经有内容（P1 或 P2/P3），则这是新题卡
