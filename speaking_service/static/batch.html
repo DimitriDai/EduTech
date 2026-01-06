@@ -28,6 +28,14 @@
     .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; }
     .divider { height:1px; background:#eee; margin:10px 0; }
   </style>
+<script>
+  // Portal cache cleanup: ensure mode C is not disabled by stale flags
+  try {
+    localStorage.removeItem("enable_export_c");
+    localStorage.removeItem("speaking_feature_flags");
+    delete window.FEATURE_FLAGS;
+  } catch (e) {}
+</script>
 </head>
 
 <body>
