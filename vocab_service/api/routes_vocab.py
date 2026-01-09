@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import json
 import uuid
+import hashlib
+import tempfile
 
 from datetime import datetime, timezone
 
@@ -24,6 +26,56 @@ logger = setup_logging()
 router = APIRouter()
 
 VOCAB_DEBUG = os.getenv("VOCAB_DEBUG", "0") == "1"
+
+def _atomic_write_json(path: str, obj: dict) -> None:
+    """
+    原子写 JSON：先写临时文件，再 os.replace 覆盖。
+    避免服务中途崩溃导致 meta.json 半截。
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    finally:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+
+def _build_input_snapshot(passage_text: str, scattered_text: str, limit: int = 200) -> dict:
+    """
+    从本次请求中提取一个“输入摘要”，用于检索：
+    - input_preview: 前 limit 字符（压缩空白）
+    - input_sha256: 全量输入的 sha256（用于去重/关联）
+    - input_len: 输入总长度
+    注意：不落全文，只落摘要 + hash。
+    """
+    p = (passage_text or "").strip()
+    s = (scattered_text or "").strip()
+    if not p and not s:
+        return {}
+    full = (p + "\n\n" + s).strip() if p and s else (p or s)
+    # 压缩空白，避免预览太难读
+    preview = " ".join(full.split())
+    if len(preview) > limit:
+        preview = preview[:limit] + "…"
+    return {
+        "input_preview": preview,
+        "input_sha256": hashlib.sha256(full.encode("utf-8")).hexdigest(),
+        "input_len": len(full),
+    }
+
+def _merge_tags(existing: list, incoming: list) -> list:
+    """
+    去重保序合并 tags。
+    """
+    old = existing or []
+    new = incoming or []
+    merged = list(dict.fromkeys([t for t in old if isinstance(t, str)] + [t for t in new if isinstance(t, str)]))
+    return merged
 
 def _stores() -> CacheStores:
     # 保持你原来的相对路径策略（跟你现有 services 一致）
@@ -58,8 +110,7 @@ def add_tags(run_id: str, req: TagsRequest, request: Request):
     meta["tags"] = merged
 
     # 3) 写回 meta
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
+    _atomic_write_json(meta_path, meta)
 
     # 4) 追加事件
     ts = datetime.now(timezone.utc).isoformat()
@@ -120,6 +171,13 @@ async def vocab_pipeline(req: PipelineRequest, request: Request):
             return datetime.now(timezone.utc).isoformat()
 
         h = request.headers
+
+        # 1) 从请求自动生成输入摘要（preview/hash/len）
+        snap = _build_input_snapshot(req.passage_text or "", req.scattered_text or "", limit=200)
+
+        # 2) 支持从请求携带 tags（如果 schema 没有 tags 字段，也不会报错）
+        incoming_tags = getattr(req, "tags", None) or []
+
         meta = {
             "run_id": run_id,
             "module": "vocab",
@@ -127,24 +185,33 @@ async def vocab_pipeline(req: PipelineRequest, request: Request):
             "source": "gateway",
             "request_id": getattr(request.state, "request_id", ""),
             "user_key": h.get("x-user-key", "anonymous"),
-            "tags": [],
+            "tags": _merge_tags([], incoming_tags),
             "billing": {
                 "plan": h.get("x-plan", "free"),
                 "paid": h.get("x-paid", "false").lower() == "true",
                 "order_id": None
-            }
+            },
+            **snap
         }
 
-        with open(os.path.join(run_track_dir, "meta.json"), "w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
+        meta_path = os.path.join(run_track_dir, "meta.json")
+        events_path = os.path.join(run_track_dir, "events.jsonl")
 
-        with open(os.path.join(run_track_dir, "events.jsonl"), "a", encoding="utf-8") as f:
+        # ✅ 原子写 meta.json，避免半写入
+        _atomic_write_json(meta_path, meta)
+
+        # 事件：run_created + input_snapshot（不落全文）
+        with open(events_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(
                 {"ts": meta["created_at"], "type": "run_created", "run_id": run_id, "request_id": meta["request_id"]},
                 ensure_ascii=False
             ) + "\n")
+            if snap:
+                f.write(json.dumps(
+                    {"ts": meta["created_at"], "type": "input_snapshot", "run_id": run_id, **snap},
+                    ensure_ascii=False
+                ) + "\n")
         # ----------------------------------------------
-
 
         # ===== 探针：计算路径 =====
         cwd = os.getcwd()
