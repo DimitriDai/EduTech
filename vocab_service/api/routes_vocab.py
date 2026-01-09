@@ -4,8 +4,10 @@ from __future__ import annotations
 import os
 import json
 import uuid
+import re
 import hashlib
 import tempfile
+from collections import Counter
 
 from datetime import datetime, timezone
 
@@ -76,6 +78,52 @@ def _merge_tags(existing: list, incoming: list) -> list:
     new = incoming or []
     merged = list(dict.fromkeys([t for t in old if isinstance(t, str)] + [t for t in new if isinstance(t, str)]))
     return merged
+# 轻量 stopwords：保证稳定、可控（你后续可按教学场景再加/减）
+_STOPWORDS = {
+    "the","a","an","and","or","but","if","then","else","when","while","for","to","of","in","on","at","by","with","as",
+    "is","am","are","was","were","be","been","being","do","does","did","done","have","has","had",
+    "it","its","this","that","these","those","i","you","we","they","he","she","him","her","them","us","our","your",
+    "from","into","out","about","over","under","up","down","more","most","less","least","very","also",
+    "can","could","may","might","must","should","would","will","shall",
+    "not","no","yes","than","too","so","such","there","here","what","which","who","whom","where","why","how",
+}
+
+def _auto_tags_from_input(passage_text: str, scattered_text: str, top_k: int = 6) -> list:
+    """
+    自动 tags（不依赖模型，成本=0，结果稳定）：
+    - 来源标签：passage / scattered（便于你按来源筛）
+    - 轻度主题提示：ielts / reading（非常保守）
+    - 关键词 top_k：从输入中抽取（仅英文字母词，长度>=4，去停用词）
+    """
+    p = (passage_text or "").strip()
+    s = (scattered_text or "").strip()
+    full = (p + "\n\n" + s).strip() if p and s else (p or s)
+    if not full:
+        return []
+
+    tags = []
+    if p:
+        tags.append("passage")
+    if s:
+        tags.append("scattered")
+
+    low = full.lower()
+    if "ielts" in low:
+        tags.append("ielts")
+    if "reading" in low:
+        tags.append("reading")
+
+    toks = re.findall(r"[a-zA-Z][a-zA-Z']+", low)
+    toks = [t for t in toks if len(t) >= 4 and t not in _STOPWORDS]
+    if toks:
+        counts = Counter(toks)
+        for w, _ in counts.most_common(80):
+            if w not in tags:
+                tags.append(w)
+            if len(tags) >= (2 + top_k):  # passage/scattered + top_k
+                break
+
+    return tags[: (2 + top_k)]
 
 def _stores() -> CacheStores:
     # 保持你原来的相对路径策略（跟你现有 services 一致）
@@ -171,11 +219,13 @@ async def vocab_pipeline(req: PipelineRequest, request: Request):
             return datetime.now(timezone.utc).isoformat()
 
         h = request.headers
-
         # 1) 从请求自动生成输入摘要（preview/hash/len）
         snap = _build_input_snapshot(req.passage_text or "", req.scattered_text or "", limit=200)
 
-        # 2) 支持从请求携带 tags（如果 schema 没有 tags 字段，也不会报错）
+        # ✅ 自动 tags（passage/scattered + 关键词 topK）
+        auto_tags = _auto_tags_from_input(req.passage_text or "", req.scattered_text or "", top_k=6)
+
+        # 仍支持请求携带 tags（可选），会与 auto_tags 合并
         incoming_tags = getattr(req, "tags", None) or []
 
         meta = {
@@ -185,7 +235,7 @@ async def vocab_pipeline(req: PipelineRequest, request: Request):
             "source": "gateway",
             "request_id": getattr(request.state, "request_id", ""),
             "user_key": h.get("x-user-key", "anonymous"),
-            "tags": _merge_tags([], incoming_tags),
+            "tags": _merge_tags(auto_tags, incoming_tags),
             "billing": {
                 "plan": h.get("x-plan", "free"),
                 "paid": h.get("x-paid", "false").lower() == "true",
