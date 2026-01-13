@@ -177,37 +177,41 @@ def _stamp(ts: str, run_id: str) -> str:
     ts2 = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"{ts2}_{rid}" if rid else ts2
 
-
 def _specs(suffix: str) -> Dict[str, Dict]:
     """
     与 generators/practice_excel_to_docx.py 的四类练习保持一致
     """
+    DOUBLE_WORD_COL_WIDTHS_CM = [1.0, 3.8, 3.8, 1.0, 3.8, 3.8]  # A 方案：竖版不溢出
+
     return {
         "word_e2c": {
             "title": "单词 英译中（学生版）",
             "filename": f"练习_单词_英译中_{suffix}.docx",
+            "layout": "double",
             "col_defs": [
                 {"key": "no", "blank": False},
                 {"key": "word_original", "blank": False},
                 {"key": "pos_cn", "blank": True},
             ],
-            "col_widths_cm": [1.2, 9.0, 9.0],
-            "body_row_height_cm": 1.5,
+            "col_widths_cm": DOUBLE_WORD_COL_WIDTHS_CM,
+            "body_row_height_cm": 1.0,   # ✅ 1.0cm
         },
         "word_c2e": {
             "title": "单词 中译英（学生版）",
             "filename": f"练习_单词_中译英_{suffix}.docx",
+            "layout": "double",
             "col_defs": [
                 {"key": "no", "blank": False},
                 {"key": "pos_cn", "blank": False},
                 {"key": "word_original", "blank": True},
             ],
-            "col_widths_cm": [1.2, 9.0, 9.0],
-            "body_row_height_cm": 1.5,
+            "col_widths_cm": DOUBLE_WORD_COL_WIDTHS_CM,
+            "body_row_height_cm": 1.0,   # ✅ 1.0cm
         },
         "sent_e2c": {
             "title": "例句 英译中（学生版）",
             "filename": f"练习_例句_英译中_{suffix}.docx",
+            "layout": "single",
             "col_defs": [
                 {"key": "no", "blank": False},
                 {"key": "example", "blank": False},
@@ -219,6 +223,7 @@ def _specs(suffix: str) -> Dict[str, Dict]:
         "sent_c2e": {
             "title": "例句 中译英（学生版）",
             "filename": f"练习_例句_中译英_{suffix}.docx",
+            "layout": "single",
             "col_defs": [
                 {"key": "no", "blank": False},
                 {"key": "example_cn", "blank": False},
@@ -299,6 +304,7 @@ def build_practice_docx(req: PracticeDocxRequest, request: Request):
                 col_defs=sp["col_defs"],
                 col_widths_cm=sp["col_widths_cm"],
                 body_row_height_cm=sp["body_row_height_cm"],
+                layout=sp.get("layout", "single"),
             )
             generated.append(out_path)
 
