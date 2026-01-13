@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from openpyxl import load_workbook
 from docx import Document
 from docx.enum.section import WD_ORIENTATION
+from docx.enum.text import WD_LINE_SPACING
+
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
@@ -48,10 +50,22 @@ def _set_run_font(run, size_pt: int = FONT_SIZE, bold: Optional[bool] = None):
 
 def _set_cell_text(cell: _Cell, text: str, size_pt: int = FONT_SIZE, bold: Optional[bool] = None):
     cell.text = "" if text is None else str(text)
+
     for p in cell.paragraphs:
+        # ✅ 关键：清掉段前段后，否则会把“1.0cm 行高”视觉上撑大
+        pf = p.paragraph_format
+        pf.space_before = Pt(0)
+        pf.space_after = Pt(0)
+        pf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        pf.line_spacing = 1.0
+
+        #（可选但安全）避免段落被额外拉开
+        pf.keep_together = True
+
         if not p.runs:
             r = p.add_run("")
             _set_run_font(r, size_pt=size_pt, bold=bold)
+
         for r in p.runs:
             _set_run_font(r, size_pt=size_pt, bold=bold)
 
@@ -159,6 +173,125 @@ def _apply_column_widths(table: Table, col_widths_cm: List[float]):
         for i, w_cm in enumerate(col_widths_cm):
             _set_cell_width(row.cells[i], w_cm)
 
+# =========================
+# 修正单栏为双栏
+# =========================
+def _set_table_cell_margins(table: Table, top_cm=0.05, bottom_cm=0.05, left_cm=0.05, right_cm=0.05):
+    """
+    ✅ 进一步保证“行高紧凑”：缩小单元格内边距
+    这是导致“看起来行高变大”的第二大元凶（第一是段前段后）。
+    """
+    tbl = table._tbl
+    tblPr = tbl.tblPr
+
+    mar = tblPr.find(qn("w:tblCellMar"))
+    if mar is None:
+        mar = OxmlElement("w:tblCellMar")
+        tblPr.append(mar)
+
+    def _set_side(tag, cm_val):
+        el = mar.find(qn(f"w:{tag}"))
+        if el is None:
+            el = OxmlElement(f"w:{tag}")
+            mar.append(el)
+        el.set(qn("w:w"), str(int(Cm(cm_val).twips)))
+        el.set(qn("w:type"), "dxa")
+
+    _set_side("top", top_cm)
+    _set_side("bottom", bottom_cm)
+    _set_side("left", left_cm)
+    _set_side("right", right_cm)
+
+
+def _calc_text_for_cell(k: str, c: Dict[str, Any], row_values, idx: Dict[str, int], row_no: int) -> str:
+    if k == "no":
+        return str(row_no)
+    if c.get("blank", False):
+        return ""
+    v = row_values[idx[k]]
+    return "" if v is None else str(v)
+
+
+def _build_table_double(
+    doc: Document,
+    ws,
+    col_defs: List[Dict[str, Any]],
+    col_widths_cm_double: List[float],
+    body_row_height_cm: float,
+):
+    """
+    双栏：每行放 2 个条目（左/右各一组 col_defs）
+    字段映射完全复用 col_defs：不会写反“留空列”。
+    """
+    header_keys = _get_header_keys(ws)
+    idx: Dict[str, int] = {}
+    for c in col_defs:
+        if c.get("blank", False):
+            continue
+        k = c["key"]
+        idx[k] = header_keys.index(k)
+
+    # 6 列：左3 + 右3
+    table = doc.add_table(rows=1, cols=len(col_defs) * 2)
+    _apply_column_widths(table, col_widths_cm_double)
+    _set_table_cell_margins(table, top_cm=0.05, bottom_cm=0.05, left_cm=0.05, right_cm=0.05)
+
+    # header row
+    hdr = table.rows[0].cells
+    for side in (0, 1):
+        base = side * len(col_defs)
+        for j, c in enumerate(col_defs):
+            k = c["key"]
+            w_cm = col_widths_cm_double[base + j]
+            _set_cell_width(hdr[base + j], w_cm)
+            _set_cell_text(hdr[base + j], _label_of(k), size_pt=FONT_SIZE, bold=True)
+
+    _set_row_height(table.rows[0], ROW_HEIGHT_HEADER_CM)
+
+    # body rows：两两配对
+    rows_data = list(ws.iter_rows(min_row=2, values_only=True))
+    n = len(rows_data)
+    pairs = (n + 1) // 2
+
+    for i in range(pairs):
+        left_i = 2 * i
+        right_i = 2 * i + 1
+
+        row = table.add_row()
+        cells = row.cells
+
+        # 左侧：row_no = left_i + 1
+        if left_i < n:
+            r_left = rows_data[left_i]
+            row_no_left = left_i + 1
+            for j, c in enumerate(col_defs):
+                k = c["key"]
+                text = _calc_text_for_cell(k, c, r_left, idx, row_no_left)
+                _set_cell_text(cells[j], text, size_pt=FONT_SIZE, bold=False)
+                _set_cell_width(cells[j], col_widths_cm_double[j])
+        else:
+            for j in range(len(col_defs)):
+                _set_cell_text(cells[j], "", size_pt=FONT_SIZE, bold=False)
+                _set_cell_width(cells[j], col_widths_cm_double[j])
+
+        # 右侧：row_no = right_i + 1
+        base = len(col_defs)
+        if right_i < n:
+            r_right = rows_data[right_i]
+            row_no_right = right_i + 1
+            for j, c in enumerate(col_defs):
+                k = c["key"]
+                text = _calc_text_for_cell(k, c, r_right, idx, row_no_right)
+                _set_cell_text(cells[base + j], text, size_pt=FONT_SIZE, bold=False)
+                _set_cell_width(cells[base + j], col_widths_cm_double[base + j])
+        else:
+            for j in range(len(col_defs)):
+                _set_cell_text(cells[base + j], "", size_pt=FONT_SIZE, bold=False)
+                _set_cell_width(cells[base + j], col_widths_cm_double[base + j])
+
+        _set_row_height(row, cm=body_row_height_cm)
+
+    return table
 
 # =========================
 # practice：只做“视图 + 留空列”
@@ -204,6 +337,7 @@ def _build_one_docx_from_workbook(
     col_defs: List[Dict[str, Any]],
     col_widths_cm: List[float],
     body_row_height_cm: float,
+    layout: str = "single",  # ✅ 新增：single / double
 ):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -235,38 +369,56 @@ def _build_one_docx_from_workbook(
             k = c["key"]
             idx[k] = header_keys.index(k)
 
-        table = doc.add_table(rows=1, cols=len(col_defs))
-        _apply_column_widths(table, col_widths_cm)
+        if layout == "double":
+            # ✅ 双栏：col_widths_cm 必须是 6 列宽
+            _build_table_double(
+                doc=doc,
+                ws=ws,
+                col_defs=col_defs,
+                col_widths_cm_double=col_widths_cm,
+                body_row_height_cm=body_row_height_cm,
+            )
+        else:
+            # ✅ 单栏：保留你原逻辑（仅加一个 cell margins，让行高更贴近 1.0cm）
+            header_keys = _get_header_keys(ws)
+            idx: Dict[str, int] = {}
+            for c in col_defs:
+                if c.get("blank", False):
+                    continue
+                k = c["key"]
+                idx[k] = header_keys.index(k)
 
-        # header row
-        hdr = table.rows[0].cells
-        for j, c in enumerate(col_defs):
-            k = c["key"]
-            w_cm = col_widths_cm[j]
-            _set_cell_width(hdr[j], w_cm)
-            _set_cell_text(hdr[j], _label_of(k), size_pt=FONT_SIZE, bold=True)
-        _set_row_height(table.rows[0], ROW_HEIGHT_HEADER_CM)
+            table = doc.add_table(rows=1, cols=len(col_defs))
+            _apply_column_widths(table, col_widths_cm)
+            _set_table_cell_margins(table, top_cm=0.05, bottom_cm=0.05, left_cm=0.05, right_cm=0.05)
 
-        # body rows
-        for row_no, r in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
-            row = table.add_row()
-            cells = row.cells
+            # header row
+            hdr = table.rows[0].cells
             for j, c in enumerate(col_defs):
                 k = c["key"]
+                w_cm = col_widths_cm[j]
+                _set_cell_width(hdr[j], w_cm)
+                _set_cell_text(hdr[j], _label_of(k), size_pt=FONT_SIZE, bold=True)
+            _set_row_height(table.rows[0], ROW_HEIGHT_HEADER_CM)
 
-                if k == "no":
-                    text = str(row_no)   # ✅ 永远按顺序生成 1,2,3…
+            # body rows
+            for row_no, r in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
+                row = table.add_row()
+                cells = row.cells
+                for j, c in enumerate(col_defs):
+                    k = c["key"]
+                    if k == "no":
+                        text = str(row_no)
+                    elif c.get("blank"):
+                        text = ""
+                    else:
+                        v = r[idx[k]]
+                        text = "" if v is None else str(v)
 
-                elif c.get("blank"):
-                    text = ""            # ✅ 学生填写列留空（表头以下）
+                    _set_cell_text(cells[j], text, size_pt=FONT_SIZE, bold=False)
+                    _set_cell_width(cells[j], col_widths_cm[j])
 
-                else:
-                    v = r[idx[k]]
-                    text = "" if v is None else str(v)
-
-                _set_cell_text(cells[j], text, size_pt=FONT_SIZE, bold=False)
-                _set_cell_width(cells[j], col_widths_cm[j])
-            _set_row_height(row, cm=body_row_height_cm)
+                _set_row_height(row, cm=body_row_height_cm)
 
         doc.add_page_break()
 
@@ -295,6 +447,7 @@ def main():
     # 4 类练习（学生版）
     # 只允许你调整：col_widths_cm 和 body_row_height_cm
     # =========================
+    DOUBLE_WORD_COL_WIDTHS_CM = [1.0, 3.8, 3.8, 1.0, 3.8, 3.8]
 
     # 单词 英译中：给英文单词；中文解释留空让学生写
     spec_word_e2c = {
@@ -305,7 +458,8 @@ def main():
             {"key": "word_original", "blank": False},
             {"key": "pos_cn", "blank": True},   # ✅ 留空
         ],
-        "col_widths_cm": [1.2, 9.0, 9.0],      # 你可自行调整
+        "layout": "double",
+        "col_widths_cm": DOUBLE_WORD_COL_WIDTHS_CM,
         "body_row_height_cm": 1.0,             # 按你要求
     }
 
@@ -318,7 +472,8 @@ def main():
             {"key": "pos_cn", "blank": False},
             {"key": "word_original", "blank": True},  # ✅ 留空
         ],
-        "col_widths_cm": [1.2, 9.0, 9.0],
+        "layout": "double",
+        "col_widths_cm": DOUBLE_WORD_COL_WIDTHS_CM,
         "body_row_height_cm": 1.0,
     }
 
@@ -331,6 +486,7 @@ def main():
             {"key": "example", "blank": False},
             {"key": "example_cn", "blank": True},  # ✅ 留空
         ],
+        "layout": "single",
         "col_widths_cm": [1.2, 9.0, 9.0],
         "body_row_height_cm": 2.0,  # 按你要求
     }
@@ -344,6 +500,7 @@ def main():
             {"key": "example_cn", "blank": False},
             {"key": "example", "blank": True},  # ✅ 留空
         ],
+        "layout": "single",
         "col_widths_cm": [1.2, 9.0, 9.0],
         "body_row_height_cm": 2.0,
     }
@@ -370,6 +527,7 @@ def main():
             col_defs=sp["col_defs"],
             col_widths_cm=sp["col_widths_cm"],
             body_row_height_cm=sp["body_row_height_cm"],
+            layout=sp.get("layout", "single"),
         )
 
     print(f"[DONE] wrote practice docx to: {os.path.abspath(out_dir)}")
