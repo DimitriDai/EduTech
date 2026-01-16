@@ -29,6 +29,8 @@ PORTAL_PATH = os.getenv("PORTAL_PATH", "gateway/static/index.html")
 # ===========================
 BASE_DIR = Path(__file__).resolve().parent
 VOCAB_UI_DIR = BASE_DIR.parent / "vocab_service" / "frontend"
+GATEWAY_STATIC_DIR = BASE_DIR / "static"
+
 
 # 新增：访问 http://127.0.0.1:9000/vocab-ui 打开 vocab 前端
 @app.get("/vocab-ui")
@@ -260,3 +262,13 @@ async def proxy_writing(request: Request, path: str):
         return await _proxy_writing_upload(request)
 
     return await _proxy(request, UPSTREAMS["writing"], path)
+
+# ===========================
+# Gateway 静态资源（用于 portal 首页的 assets，如 banners）
+# ===========================
+if GATEWAY_STATIC_DIR.exists():
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(GATEWAY_STATIC_DIR / "assets"), html=False),
+        name="gateway-assets",
+    )

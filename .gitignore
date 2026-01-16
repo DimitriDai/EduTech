@@ -26,6 +26,9 @@
 !gateway/**
 !scripts/
 !scripts/**
+!gateway/static/assets/
+!gateway/static/assets/**
+!gateway/static/assets/**/*.png
 
 ############################################
 # 2) 通用：Python / Node / 系统垃圾 / IDE
