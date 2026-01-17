@@ -350,6 +350,8 @@
   };
 
   // =============== DOM ===============
+  let OUTPUT_PHASE = "idle"; 
+  // "idle" | "running" | "done"
   const logEl = $("log");
   const runIdEl = $("runId");
   const runStatus = $("runStatus");
@@ -457,6 +459,7 @@
   });
 
   function showOutputPending() {
+    OUTPUT_PHASE = "running";
     const zone = $("outputZone");
     if (!zone) return;
 
@@ -476,15 +479,17 @@
     gradingFileEl.disabled = true;
     btnGrade.disabled = true;
   }
-
   function applyPreviewToggle() {
     if (!previewToggle) return;
 
     const zone = $("outputZone");
     if (!zone) return;
 
+    // running/done 时，预览不允许覆盖真实状态
+    if (OUTPUT_PHASE !== "idle") return;
+
     if (previewToggle.checked) {
-      // 强制显示输出区，但保持 pending 状态
+      // 强制显示输出区，但保持 pending 状态（仅用于看布局）
       zone.classList.remove("is-hidden");
       zone.setAttribute("aria-hidden", "false");
 
@@ -500,7 +505,7 @@
       gradingFileEl.disabled = true;
       btnGrade.disabled = true;
     } else {
-      // 如果还没真正生成过，就隐藏
+      // idle 且未生成过才隐藏
       if (zone.dataset.generated !== "1") {
         zone.classList.add("is-hidden");
         zone.setAttribute("aria-hidden", "true");
@@ -509,6 +514,7 @@
   }
 
   function setOutputReady({ vocabReady, practiceReady }) {
+    OUTPUT_PHASE = "done";
     if (vocabReady) {
       const el = $("cardVocab");
       el.classList.remove("is-pending");
