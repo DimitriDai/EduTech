@@ -3,24 +3,54 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Vocab Service Frontend (Local)</title>
+  <title>词汇整理与导出</title>
   <style>
-    :root { --bd:#e5e7eb; --txt:#111827; --muted:#6b7280; --ok:#16a34a; --bad:#dc2626; --bg:#ffffff; }
+    :root {
+      --bd:#e5e7eb;
+      --txt:#111827;
+      --muted:#6b7280;
+      --ok:#16a34a;
+      --bad:#dc2626;
+      --bg:#ffffff;
+
+      /* vocab theme */
+      --vocab-soft:#e8f0e6;
+      --vocab-accent:#cff7c8;
+      --vocab-ink:#00897b;
+    }
+
+    /* 标题颜色 */
+    .title {
+      color: var(--vocab-ink);
+    }
+
+    *{box-sizing:border-box;}
     body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
            background: var(--bg); color: var(--txt); margin: 0; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
-    h1 { font-size: 18px; margin: 0 0 12px; }
-    h2 { font-size: 15px; margin: 18px 0 8px; }
-    .card { border: 1px solid var(--bd); border-radius: 10px; padding: 12px; background: #fff; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .col { flex: 1 1 320px; min-width: 280px; }
-    textarea { width: 100%; min-height: 160px; resize: vertical; padding: 10px; border: 1px solid var(--bd); border-radius: 10px; outline: none; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 26px 22px 44px; }
+    .title{display:flex; align-items:baseline; gap:10px;}
+    .title-ico{font-size: 28px; line-height: 1;}
+    h1 { font-size: 32px; margin: 0 0 6px; letter-spacing: .2px; }
+    .subtitle { color: var(--muted); margin: 0 0 18px; }
+    h2 { font-size: 14px; font-weight: 600; margin: 14px 0 8px; color: var(--muted); letter-spacing: .2px; }
+    .card { border: 1px solid var(--bd); border-radius: 12px; padding: 22px; background: #fff; }
+    .card.soft { background: var(--vocab-soft); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+    .col { min-width: 0; }
+    .col > *:last-child { margin-bottom: 0; }
+    @media (max-width: 900px) {
+      .row { grid-template-columns: 1fr; }
+    }
+    textarea { width: 100%; min-height: 160px; resize: vertical; padding: 10px; border: 1px solid #dfe7e2; border-radius: 10px; outline: none; background:#fff; }
     input[type="text"] { width: 100%; padding: 9px 10px; border: 1px solid var(--bd); border-radius: 10px; outline: none; }
     select { padding: 8px 10px; border: 1px solid var(--bd); border-radius: 10px; background: #fff; }
     .btn { border: 1px solid var(--bd); border-radius: 10px; padding: 9px 12px; background: #fff; cursor: pointer; }
-    .btn.primary { background: #111827; color: #fff; border-color: #111827; }
+    .btn.primary { background: var(--vocab-ink); color: #fff; border-color: var(--vocab-ink); }
+    .btn.secondary { background: #e7f5f1; color: var(--vocab-ink); border-color: #8fc7b8; }
+    .btn.ghost { background: #ffffff; color: var(--vocab-ink); border-color: #8fc7b8; }
+    .btn.secondary:hover, .btn.ghost:hover { background: #f2fbf8; }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
-    .muted { color: var(--muted); font-size: 12px; }
+    .muted { color: var(--muted); font-size: 13px; }
     .status .ok { color: var(--ok); font-weight: 700; }
     .status .bad { color: var(--bad); font-weight: 700; }
     .chips { display:flex; gap:8px; flex-wrap: wrap; margin-top: 8px; }
@@ -31,102 +61,236 @@
     .dlitem code { font-size: 12px; color: #374151; }
     .dlitem .grow { flex: 1; }
     .log { width:100%; min-height: 160px; padding:10px; border:1px solid var(--bd); border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; white-space: pre-wrap; background:#fafafa; }
-    .hint { padding: 8px; border: 1px dashed var(--bd); border-radius: 10px; color: var(--muted); font-size: 12px; }
+    .hint { padding: 10px; border: 1px dashed var(--bd); border-radius: 10px; color: var(--muted); font-size: 12px; background: #fafafa; }
     .divider { height:1px; background: var(--bd); margin: 14px 0; }
+
+    /* UI: hide debug-only sections */
+    .hide { display:none !important; }
+
+    /* layout helpers */
+    .stack { display:flex; flex-direction: column; gap: 10px; }
+    .ocrbar { display:flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .ocrbar input[type="file"] { max-width: 280px; }
+    .controls { display:flex; align-items:center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .controls .muted { font-size: 12px; }
+    .inputs textarea { min-height: 220px; }
+
+    /* keep counter in DOM but not shown */
+    #charCounter { display:none; }
+
+    .ico { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; color: var(--vocab-ink); }
+    .ico svg { width:18px; height:18px; fill: currentColor; }
+  
+    .hero{ margin-bottom: 14px; }
+    .results{ margin-top: 18px; }
+    .results .card h2{ margin-top: 0; }
+
+    /* layout closer to mock: green section + white inner panels */
+    .section-title{margin-bottom:10px; display:flex; align-items:center; gap:8px; font-weight:700; color: var(--vocab-ink);} 
+    .input-grid{display:grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start;}
+    .panel{background:#f3f8f4; border:1px solid rgba(0,0,0,.06); border-radius: 14px; padding: 16px; box-shadow: 0 1px 0 rgba(0,0,0,.02);}
+    .panel-head{display:flex; align-items:center; gap:8px; margin: 0 0 10px; font-weight:700; color: #0f172a;}
+    .panel-sub{color: var(--muted); font-size: 12px; margin: 0 0 10px;}
+    .ocrbar{margin:0 0 10px; display:flex; gap: 10px; align-items: center; flex-wrap: wrap;}
+    .inputs textarea{min-height: 230px;}
+    .controls{margin-top: 12px;}
+    .name-row{display:flex; flex-direction:column; gap:8px;}
+    .preset-wrap{background: var(--vocab-accent); border-radius: 14px; padding: 14px;}
+    .runbar{display:flex; gap:10px; align-items:center; margin-top: 12px; flex-wrap: wrap;}
+    .runmeta{color: var(--muted); font-size: 12px;}
+
+    .divider.orand{
+      position: relative;
+      height: 1px;
+      background: rgba(15,23,42,.10);
+      margin: 14px 0;
+    }
+    .divider.orand > span{
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 0 10px;
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .2px;
+    }
+
+    @media (max-width: 900px){
+      .input-grid{grid-template-columns:1fr;}
+    }
+    /* ========= Output zone states ========= */
+    #outputZone.is-hidden{ display:none; }
+
+    /* pending：浅 + 禁用交互 + 禁止选中文字 */
+    .output-card.is-pending{
+      opacity: .55;
+      filter: grayscale(.08);
+      pointer-events: none;
+      user-select: none;
+      border: 1px solid rgba(15,23,42,.08);
+      box-shadow: none;
+    }
+
+    /* ready：恢复交互 + 轻微强化 */
+    .output-card.is-ready{
+      opacity: 1;
+      filter: none;
+      pointer-events: auto;
+      user-select: auto;
+      border: 1px solid rgba(15,23,42,.20);
+      box-shadow: 0 1px 0 rgba(15,23,42,.06);
+    }
+
   </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>词汇整理一站式工具（本地）</h1>
 
-  <div class="card">
-    <div class="row">
-      <div class="col">
-        <div class="muted">Passage（可留空）</div>
-        <div class="hint" style="margin-bottom:8px;">
-          OCR 上传（PDF / 图片，单文件）：<br/>
-          <input type="file"
-                id="ocrFile"
-                accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" />
-          <button class="btn" id="btnOCR" style="margin-left:8px;">
-            OCR 并追加到 Passage
-          </button>
-          <div id="ocrHint" class="muted" style="margin-top:4px;"></div>
+<div class="wrap">
+
+  <!-- Layer 1: 顶部任务区（标题 + 一句话） -->
+  <header class="hero">
+    <h1 class="title">
+      <span class="title-ico" aria-hidden="true">📚</span><span>Vocabulary</span>
+    </h1>
+    <p class="subtitle">把文章、截图或课堂笔记里的重点词，一次整理成可下载的词汇表和练习</p>
+  </header>
+
+  <!-- Layer 2: 配置区（输入、配置、输出） -->
+  <main class="card soft">
+
+    <div class="input-grid">
+      <!-- Panel A: 输入 -->
+      <section class="panel inputs">
+        <div class="panel-head">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5L14 3.5zM7 11h10v2H7v-2zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/></svg>
+          </span>
+          <span>输入文章</span>
         </div>
-        <textarea id="passage" placeholder="可留空。建议粘贴阅读文章/段落。"></textarea>
-        <div id="charCounter" class="muted" style="margin-top:6px;">
-          0 / 20000 chars
+
+        <div class="ocrbar">
+          <input type="file" id="ocrFile" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" />
+          <button class="btn secondary" id="btnOCR">🪄 识别并追加到文章</button>
+          <div id="ocrHint" class="muted"></div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
-          <span class="muted">提取数量</span>
+
+        <textarea id="passage" placeholder="在这里粘贴完整文章内容，截图识别的文字也会自动追加到这里"></textarea>
+        <div id="charCounter" class="muted" style="margin-top:6px;">0 / 20000 chars</div>
+
+        <div class="controls">
+          <span class="muted" style="display:inline-flex; align-items:center; gap:6px;">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 4h18v2H3V4zm0 6h18v2H3v-2zm0 6h12v2H3v-2z"/></svg></span>
+            <span>提取数量</span>
+          </span>
           <select id="countSel">
             <option value="15" selected>15</option>
             <option value="20">20</option>
             <option value="25">25</option>
           </select>
-          <span class="muted">（count）</span>
+          <span class="muted">（仅作用于文章）</span>
         </div>
-      </div>
 
-      <div class="col">
-        <div class="muted">Scattered（可留空）</div>
-        <textarea id="scattered" placeholder="可留空。可输入零散单词/短语，逗号分隔。"></textarea>
+        <!-- 这里是你要的 “or/and” -->
+        <div class="divider orand"><span>or / and</span></div>
+
+        <div class="panel-head" style="margin-top:4px;">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9l-5 3V5zm4 2h8v2H8V7zm0 4h8v2H8v-2zm0 4h5v2H8v-2z"/></svg>
+          </span>
+          <span>输入笔记</span>
+        </div>
+        <textarea id="scattered" placeholder="输入笔记"></textarea>
+      </section>
+
+      <!-- Panel B: 输出配置 -->
+      <section class="panel options">
+        <div class="panel-head">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l8.06-8.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>
+          </span>
+          <span>输出配置</span>
+        </div>
+
+        <div class="name-row">
+          <div class="muted">自定义命名（可选）</div>
+          <input id="namePrefix" type="text" placeholder="" />
+        </div>
 
         <div class="divider"></div>
 
-        <div class="muted">自定义命名戳（不改后端，仅影响下载名/zip 内部路径）</div>
-        <input id="namePrefix" type="text" placeholder="例如：P3_The_Value_of_Literary_Prizes" />
-        <div class="muted" style="margin-top:6px;">建议只用字母/数字/下划线，空格会自动处理。</div>
-      </div>
+        <div class="preset-wrap">
+          <div class="muted" style="display:flex; align-items:center; gap:8px; margin-bottom: 8px;">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-2h2v2zm1.07-7.75-.9.92A1.49 1.49 0 0 0 13 12v1h-2v-1a3 3 0 0 1 .88-2.12l1.24-1.26a1.5 1.5 0 1 0-2.56-1.06H8.5a3.5 3.5 0 1 1 6 2.69z"/></svg></span>
+            <span>词表版式</span>
+            <span>（默认：各版式均含中英释义）</span>
+          </div>
+
+          <div class="chips" id="presetChips">
+            <button class="chip active" data-preset="synonyms">含同义替换</button>
+            <button class="chip" data-preset="all">全字段</button>
+            <button class="chip" data-preset="sent">含例句</button>
+            <button class="chip" data-preset="basic">基础中英释义</button>
+          </div>
+        </div>
+
+        <!-- 仅用于前端调试：预览输出区 -->
+        <label class="muted" style="display:flex; align-items:center; gap:8px; margin:6px 0 2px;">
+          <input type="checkbox" id="togglePreviewOutput">
+          预览输出区
+        </label>
+
+        <div class="divider"></div>
+
+        <!-- 生成按钮放这里 -->
+        <div class="runbar" style="margin-top: 2px;">
+          <button class="btn primary" id="btnRun">⚡ 提取并生成</button>
+          <div class="runmeta">当前 run_id：<code id="runId">-</code></div>
+          <div class="status muted" id="runStatus"></div>
+        </div>
+        
+        <!-- 输出区：默认不展示；点击“提取并生成”后才出现 -->
+        <section id="outputZone" class="is-hidden" aria-hidden="true">
+
+          <div class="divider"></div>
+
+          <div class="card output-card is-pending" id="cardVocab" style="margin-top:10px;">
+            <div class="panel-head">输出词表</div>
+            <div class="status muted" id="vocabNoteStatus">-</div>
+            <div id="vocabNoteArea" class="hint">尚未生成</div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+              <button class="btn ghost" id="btnDownloadVocab" disabled>下载所选</button>
+            </div>
+          </div>
+
+          <div class="card output-card is-pending" id="cardPractice" style="margin-top:12px;">
+            <div class="panel-head">输出练习</div>
+            <div class="status muted" id="practiceStatus">-</div>
+            <div id="practiceArea" class="hint">尚未生成</div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+              <button class="btn ghost" id="btnDownloadPractice" disabled>下载所选</button>
+            </div>
+          </div>
+
+          <div class="card output-card is-pending" id="cardGrading" style="margin-top:12px;">
+            <div class="panel-head">自动批改</div>
+            <div class="muted">仅接受本工具生成的“练习_例句_中译英”docx（或 zip）。</div>
+            <div style="display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap: wrap;">
+              <input type="file" id="gradingFile" accept=".docx,.zip" disabled />
+              <button class="btn ghost" id="btnGrade" disabled>上传并批改</button>
+              <div class="status muted" id="gradingMsg">-</div>
+            </div>
+          </div>
+
+        </section> <!-- /outputZone -->
+      </section> <!-- /Panel B -->
     </div>
 
-    <div class="divider"></div>
+    <!-- 日志保留在 main 末尾（仍然最弱、最底） -->
+    <textarea class="log hide" id="log" readonly></textarea>
+  </main>
 
-    <div class="muted">字段预设（默认：含同义替换）</div>
-    <div class="chips" id="presetChips">
-      <button class="chip active" data-preset="synonyms">含同义替换</button>
-      <button class="chip" data-preset="all">全字段</button>
-      <button class="chip" data-preset="sent">含例句</button>
-      <button class="chip" data-preset="basic">基础中英释义</button>
-    </div>
-
-    <div style="display:flex; gap:10px; align-items:center; margin-top: 10px;">
-      <button class="btn primary" id="btnRun">提取并生成</button>
-      <div class="muted">当前 run_id：<code id="runId">-</code></div>
-      <div class="status muted" id="runStatus"></div>
-    </div>
-  </div>
-
-  <h2>词汇笔记下载</h2>
-  <div class="card">
-    <div class="status muted" id="vocabNoteStatus">-</div>
-    <div id="vocabNoteArea" class="hint">尚未生成</div>
-    <div style="display:flex; gap:10px; margin-top:10px;">
-      <button class="btn" id="btnDownloadVocab" disabled>下载所选</button>
-    </div>
-  </div>
-
-  <h2>Practice 下载</h2>
-  <div class="card">
-    <div class="status muted" id="practiceStatus">-</div>
-    <div id="practiceArea" class="hint">尚未生成</div>
-    <div style="display:flex; gap:10px; margin-top:10px;">
-      <button class="btn" id="btnDownloadPractice" disabled>下载所选</button>
-    </div>
-  </div>
-
-  <h2>批改</h2>
-  <div class="card">
-    <div class="muted">仅接受本工具生成的“练习_例句_中译英”docx（或 zip）。</div>
-    <div style="display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap: wrap;">
-      <input type="file" id="gradingFile" accept=".docx,.zip" />
-      <button class="btn" id="btnGrade" disabled>上传并批改</button>
-      <div class="status muted" id="gradingMsg">-</div>
-    </div>
-  </div>
-
-  <h2>日志</h2>
-  <textarea class="log" id="log" readonly></textarea>
 </div>
 
 <script>
@@ -210,6 +374,7 @@
   const gradingFileEl = $("gradingFile");
   const btnGrade = $("btnGrade");
   const gradingMsg = $("gradingMsg");
+  const previewToggle = $("togglePreviewOutput");
 
   // =============== State ===============
   let activePreset = "synonyms";
@@ -290,6 +455,87 @@
       ocrFileEl.value = "";
     }
   });
+
+  function showOutputPending() {
+    const zone = $("outputZone");
+    if (!zone) return;
+
+    zone.classList.remove("is-hidden");
+    zone.setAttribute("aria-hidden", "false");
+
+    ["cardVocab", "cardPractice", "cardGrading"].forEach(id => {
+      const el = $(id);
+      if (!el) return;
+      el.classList.add("is-pending");
+      el.classList.remove("is-ready");
+    });
+
+    // 明确禁用（与 pending 视觉一致）
+    btnDownloadVocab.disabled = true;
+    btnDownloadPractice.disabled = true;
+    gradingFileEl.disabled = true;
+    btnGrade.disabled = true;
+  }
+
+  function applyPreviewToggle() {
+    if (!previewToggle) return;
+
+    const zone = $("outputZone");
+    if (!zone) return;
+
+    if (previewToggle.checked) {
+      // 强制显示输出区，但保持 pending 状态
+      zone.classList.remove("is-hidden");
+      zone.setAttribute("aria-hidden", "false");
+
+      ["cardVocab","cardPractice","cardGrading"].forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.classList.add("is-pending");
+        el.classList.remove("is-ready");
+      });
+
+      btnDownloadVocab.disabled = true;
+      btnDownloadPractice.disabled = true;
+      gradingFileEl.disabled = true;
+      btnGrade.disabled = true;
+    } else {
+      // 如果还没真正生成过，就隐藏
+      if (zone.dataset.generated !== "1") {
+        zone.classList.add("is-hidden");
+        zone.setAttribute("aria-hidden", "true");
+      }
+    }
+  }
+
+  function setOutputReady({ vocabReady, practiceReady }) {
+    if (vocabReady) {
+      const el = $("cardVocab");
+      el.classList.remove("is-pending");
+      el.classList.add("is-ready");
+      btnDownloadVocab.disabled = false;
+    }
+    if (practiceReady) {
+      const el = $("cardPractice");
+      el.classList.remove("is-pending");
+      el.classList.add("is-ready");
+      btnDownloadPractice.disabled = false;
+
+      // 批改依赖练习输出：练习 ready 才允许选文件
+      const g = $("cardGrading");
+      g.classList.remove("is-pending");
+      g.classList.add("is-ready");
+      gradingFileEl.disabled = false;
+      // btnGrade 继续由 change 事件控制（没选文件就禁用）
+      btnGrade.disabled = !(gradingFileEl.files && gradingFileEl.files.length > 0);
+    }
+  }
+
+  function setOutputFailed(msg) {
+    const m = msg || "失败";
+    vocabNoteStatus.innerHTML = `<span class="bad">${escapeHtml(m)}</span>`;
+    practiceStatus.innerHTML = `<span class="bad">${escapeHtml(m)}</span>`;
+  }
 
   function log(msg) {
     const t = new Date().toISOString().slice(11, 19);
@@ -398,6 +644,11 @@
   });
 
   // =============== Main flow ===============
+  if (previewToggle) {
+    previewToggle.addEventListener("change", applyPreviewToggle);
+    applyPreviewToggle();
+  }
+
   btnRun.addEventListener("click", async () => {
     const passageLen = (passageEl.value || "").length;
     if (passageLen > MAX_CHARS) {
@@ -412,6 +663,7 @@
     practiceArea.innerHTML = `<div class="hint">生成中...</div>`;
     btnDownloadVocab.disabled = true;
     btnDownloadPractice.disabled = true;
+    showOutputPending();
 
     currentRunId = "";
     lastExport = null;
@@ -620,7 +872,12 @@
       renderMixedList(practiceArea, pitems, "practice");
       btnDownloadPractice.disabled = pitems.length === 0;
       practiceStatus.innerHTML = pitems.length ? `<span class="ok">就绪</span>` : `<span class="bad">未发现文件</span>`;
-
+      setOutputReady({
+        vocabReady: items.length > 0,
+        practiceReady: pitems.length > 0
+      });
+      $("outputZone").dataset.generated = "1";
+      
       runStatus.innerHTML = `<span class="ok">完成</span>`;
       log(`DONE run_id=${currentRunId}`);
 
@@ -632,6 +889,7 @@
       practiceStatus.innerHTML = `<span class="bad">失败</span>`;
       log(`ERROR: ${String(e.message || e)}`);
       alert(String(e.message || e));
+      setOutputFailed(String(e.message || e));
     } finally {
       btnRun.disabled = false;
     }
