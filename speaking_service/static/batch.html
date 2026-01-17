@@ -4,30 +4,182 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Speaking Batch</title>
+
   <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; }
-    body { margin: 20px; }
-    h1 { margin: 0 0 12px 0; font-size: 20px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 12px 0; }
-    .card h2 { margin: 0 0 10px 0; font-size: 16px; }
-    label { display: inline-flex; gap: 8px; align-items: center; }
-    input[type="text"], select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px; }
-    input[type="file"] { max-width: 520px; }
-    button { padding: 8px 12px; border: 1px solid #333; background: #fff; border-radius: 10px; cursor: pointer; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    .muted { color: #666; font-size: 12px; }
-    .warn { color: #b45309; }
-    .ok { color: #065f46; }
-    .err { color: #b91c1c; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    textarea { width: 100%; min-height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    .links a { display: inline-block; margin: 6px 10px 0 0; }
-    .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-    @media (min-width: 860px) { .grid { grid-template-columns: 1.2fr .8fr; } }
-    .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; }
-    .divider { height:1px; background:#eee; margin:10px 0; }
+    :root{
+      --page-bg:#ffffff;
+      --card-bg:#c3d8ff;
+      --card-inner:#ffffff;
+
+      --ink:#2165c7;
+      --ink-soft:rgba(33,101,199,.78);
+      --bd: rgba(33,101,199,.22);
+
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    body{
+      margin: 20px;
+      background: var(--page-bg);
+      color: #1f2937;
+    }
+
+    /* 顶部标题区：不做卡片 */
+    .hero{
+      margin-bottom: 14px;
+    }
+
+    h1{
+      margin: 0 0 10px 0;
+      font-size: 26px;
+      color: var(--ink);
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight: 800;
+    }
+
+    .muted{ color: var(--ink-soft); font-size: 12px; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    .row{
+      display:flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+
+    .help-row{
+      margin-top: 8px;
+    }
+
+    .help-link{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: rgba(33,101,199,.78);
+      text-decoration: none;
+    }
+
+    .help-link:hover{
+      text-decoration: underline;
+    }
+
+    .help-ico{
+      display:inline-flex;
+      width: 18px;
+      height: 18px;
+      align-items:center;
+      justify-content:center;
+      border-radius: 999px;
+      border: 1px solid rgba(33,101,199,.25);
+      background: rgba(255,255,255,.65);
+      line-height: 1;
+    }
+
+    /* 卡片：输入/配置/下载都用同一层级 */
+    .card{
+      background: var(--card-bg);
+      border: 1px solid var(--bd);
+      border-radius: 14px;
+      padding: 14px;
+      margin: 12px 0;
+      box-shadow: 0 10px 26px rgba(33,101,199,.08);
+    }
+
+    /* 卡片内的“白色内衬”，让控件更清爽 */
+    .card-inner{
+      background: var(--card-inner);
+      border: 1px solid rgba(33,101,199,.14);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .card h2{
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: var(--ink);
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-weight: 800;
+    }
+
+    .ico{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    label{ display:inline-flex; gap:8px; align-items:center; color:#1f2937; }
+
+    input[type="text"], select{
+      padding: 8px 10px;
+      border: 1px solid rgba(33,101,199,.25);
+      border-radius: 10px;
+      background:#fff;
+    }
+
+    input[type="file"]{
+      max-width: 520px;
+    }
+
+    button{
+      padding: 10px 14px;
+      border: 1px solid rgba(33,101,199,.28);
+      background: #ffffff;
+      color: var(--ink);
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    #resetBtn{ display:none !important; }
+
+    /* 主按钮更突出 */
+    #runBtn{
+      background: var(--ink);
+      color: #ffffff;
+      border-color: rgba(33,101,199,.45);
+    }
+    #runBtn:disabled, button:disabled{ opacity: .55; cursor: not-allowed; }
+
+    .pill{
+      display:inline-block;
+      padding:2px 8px;
+      border:1px solid rgba(33,101,199,.25);
+      border-radius:999px;
+      font-size:12px;
+      color: var(--ink-soft);
+      background: rgba(255,255,255,.6);
+    }
+
+    .divider{ height:1px; background: rgba(33,101,199,.20); margin:12px 0; }
+
+    /* 下载链接更像“列表” */
+    .links a{
+      display:block;
+      margin: 6px 0 0 0;
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .links a:hover{ text-decoration: underline; }
+
+    /* 隐藏：状态日志（但 DOM 保留，功能不动） */
+    .log-hidden{
+      display:none !important;
+    }
+
+    /* 隐藏：高级配置（prefix/band/role/style/pageBreak 等） */
+    .advanced-hidden{
+      display:none !important;
+    }
   </style>
+
 <script>
   // Portal cache cleanup: ensure mode C is not disabled by stale flags
   try {
@@ -37,31 +189,49 @@
   } catch (e) {}
 </script>
 </head>
-
 <body>
-  <h1>口语批量处理</h1>
-  <div class="muted">后端：<span class="mono" id="apiBaseLabel">http://127.0.0.1:8001</span></div>
-
-  <div class="card">
-    <h2>1. 上传截图</h2>
-    <div class="row">
-      <label>选择截图（可多选）
-        <input id="files" type="file" multiple accept=".png,.jpg,.jpeg,.webp" />
-      </label>
-    </div>
-    <div class="muted">流程：init → upload_images → rename → OCR → parse → generate → export → download</div>
+  <div class="hero">
+    <h1><span class="ico">🗣️</span><span>Speaking</span></h1>
+    <div class="muted">上传截图后，将自动识别并生成可下载的口语题库</div>
   </div>
 
-  <div class="grid">
-    <div class="card">
-      <h2>2. 导出模式</h2>
+  <!-- 上传截图 -->
+  <div class="card">
+    <h2><span class="ico">📷</span><span>上传截图</span></h2>
+    <div class="card-inner">
 
+      <!-- 文件选择（第一行） -->
+      <div class="row">
+        <label>
+          选择截图（可多选）
+          <input id="files" type="file" multiple accept=".png,.jpg,.jpeg,.webp" />
+        </label>
+      </div>
+
+      <!-- 查看示例（第二行：取代原“流程...”） -->
+      <div class="help-row">
+        <a class="help-link"
+          href="/static/assets/upload_snapshot_eg/snapshot_requirement.png"
+          download>
+          <span class="help-ico">❓</span>
+          <span>查看截图格式示例</span>
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 导出配置 -->
+  <div class="card">
+    <h2><span class="ico">⚙️</span><span>导出配置</span></h2>
+    <div class="card-inner">
+      <!-- 仅保留 3 个版式 + merge_all -->
       <div class="row" style="margin-bottom:8px;">
-        <label><input type="radio" name="mode" value="A" checked /> A 纯问题版（不显示 outline / answer）</label>
+        <label><input type="radio" name="mode" value="A" checked /> 纯问题版</label>
       </div>
 
       <div class="row" style="margin-bottom:8px;">
-        <label><input type="radio" name="mode" value="B" /> B 答案版（可选展示内容）</label>
+        <label><input type="radio" name="mode" value="B" /> 含答案版本一</label>
       </div>
 
       <div id="bOptions" style="margin-left:20px; display:none;">
@@ -73,44 +243,44 @@
       </div>
 
       <div class="row" style="margin:12px 0 8px 0;">
-        <label id="modeCWrap"><input id="modeC" type="radio" name="mode" value="C" /> C 截图版</label>
+        <label id="modeCWrap"><input id="modeC" type="radio" name="mode" value="C" /> 含答案版本二</label>
         <span id="cFlag" class="pill muted" style="display:none;"></span>
       </div>
 
       <div class="divider"></div>
 
       <div class="row" style="margin-top:10px;">
-        <label>分页
-          <select id="pageBreak">
-            <option value="part" selected>part</option>
-            <option value="segment">segment</option>
-            <option value="none">none</option>
-          </select>
-        </label>
-
-        <label>prefix（OCR 用）
-          <input id="prefix" type="text" value="雅思话题" />
-        </label>
-      </div>
-
-      <div class="row" style="margin-top:10px;">
-        <label>band
-          <input id="band" type="text" value="6.5-7" />
-        </label>
-        <label>role
-          <input id="role" type="text" value="High School Student (Hangzhou, China)" />
-        </label>
-        <label>style
-          <input id="style" type="text" value="Natural & Native" />
-        </label>
         <label class="muted">
           <input id="mergeAll" type="checkbox" />
-          merge_all
+          需要总文档
         </label>
       </div>
 
-      <!-- Teacher settings（你已经加过这段，这里保留） -->
-      <details class="teacher-settings" style="margin-top:10px;">
+      <!-- 高级配置：不展示，但保留在 DOM（功能不动） -->
+      <div class="advanced-hidden">
+        <div class="row" style="margin-top:10px;">
+          <label>分页
+            <select id="pageBreak">
+              <option value="part" selected>part</option>
+              <option value="segment">segment</option>
+              <option value="none">none</option>
+            </select>
+          </label>
+
+          <label>prefix（OCR 用）
+            <input id="prefix" type="text" value="雅思话题" />
+          </label>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <label>band <input id="band" type="text" value="6.5-7" /></label>
+          <label>role <input id="role" type="text" value="High School Student (Hangzhou, China)" /></label>
+          <label>style <input id="style" type="text" value="Natural & Native" /></label>
+        </div>
+      </div>
+
+      <!-- Teacher settings：默认不显示；你可用 dev 开关打开 -->
+      <details class="teacher-settings advanced-hidden" style="margin-top:10px;">
         <summary class="muted">Teacher settings</summary>
 
         <div class="row" style="margin-top:8px;">
@@ -132,20 +302,45 @@
       </details>
 
       <div class="row" style="margin-top:12px;">
-        <button id="runBtn">Run</button>
+        <button id="runBtn"><span class="ico">🚀</span><span>生成并排版</span></button>
+
+        <!-- Reset 按钮仍保留（JS 会引用），但会用 CSS 隐藏 -->
         <button id="resetBtn" type="button">Reset</button>
+
+        <span id="runHint" class="muted"></span>
         <span class="muted">当前 run_id：<span id="runId" class="mono">-</span></span>
       </div>
-
-      <div id="downloadBox" class="links" style="margin-top:10px;"></div>
-    </div>
-
-    <div class="card">
-      <h2>3. 状态日志</h2>
-      <div class="muted">出错时复制整段日志给我就行。</div>
-      <textarea id="log" readonly></textarea>
     </div>
   </div>
+
+  <!-- 下载 -->
+  <div class="card">
+    <h2><span class="ico">⬇️</span><span>下载区域</span></h2>
+    <div class="card-inner">
+      <div id="downloadBox" class="links"></div>
+    </div>
+  </div>
+
+  <!-- 日志：不展示，但保留元素，JS 仍可写入 -->
+  <div class="log-hidden">
+    <textarea id="log" readonly></textarea>
+  </div>
+
+<script>
+  // dev 开关：?dev=1 或 localStorage.speaking_dev=1 才显示 Teacher settings（不解锁其他高级项）
+  (function(){
+    try{
+      const qs = new URLSearchParams(location.search);
+      const dev = (qs.get("dev") === "1") || (localStorage.getItem("speaking_dev") === "1");
+      if(dev){
+        document.querySelectorAll(".teacher-settings").forEach(el=>{
+          el.classList.remove("advanced-hidden");
+          el.open = false; // 默认不展开
+        });
+      }
+    }catch(e){}
+  })();
+</script>
 
 <script>
   // =========================
@@ -159,6 +354,7 @@
   // =========================
   const $ = (id) => document.getElementById(id);
   const logEl = $("log");
+  const runHintEl = $("runHint");
 
   // ✅ 教师设置（缓存控制）
   const forceRegenEl = $("forceRegen");
@@ -301,7 +497,6 @@
     $("modeCWrap").style.opacity = "1";
     $("modeC").disabled = false;
     $("cFlag").style.display = "inline-block";
-    $("cFlag").textContent = "C 可用（前端强制）";
 
     logLine(`frontend/config forced: enable_export_c=${enabled}`, "OK");
   }
@@ -311,6 +506,7 @@
   // =========================
   async function runPipeline() {
     clearDownloads();
+    if (runHintEl) runHintEl.textContent = "生成中...";
 
     const files = $("files").files;
     if (!files || files.length === 0) {
@@ -420,8 +616,10 @@
       // 8) download links
       renderDownloads(runId, expResp.files || []);
       logLine("Done ✅", "OK");
+      if (runHintEl) runHintEl.textContent = "完成：请在“下载”区域获取文件";
     } catch (e) {
       logLine(e.message || String(e), "ERR");
+      if (runHintEl) runHintEl.textContent = "失败：请检查输入或稍后重试";
     } finally {
       setBusy(false);
     }
