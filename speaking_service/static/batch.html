@@ -212,7 +212,7 @@
       <div class="help-row">
         <a class="help-link"
           href="/static/assets/upload_snapshot_eg/snapshot_requirement.png"
-          download>
+          download="snapshot_requirement.png">
           <span class="help-ico">❓</span>
           <span>查看截图格式示例</span>
         </a>
@@ -241,6 +241,16 @@
           <label><input type="radio" name="bShow" value="both" /> outline + sample answer</label>
         </div>
       </div>
+
+      <script>
+      document.querySelectorAll('input[name="mode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          document.getElementById('bOptions').style.display =
+            radio.value === 'B' && radio.checked ? 'block' : 'none';
+        });
+      });
+      </script>
+
 
       <div class="row" style="margin:12px 0 8px 0;">
         <label id="modeCWrap"><input id="modeC" type="radio" name="mode" value="C" /> 含答案版本二</label>
