@@ -3,59 +3,248 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IELTS 批量写作批改</title>
+  <title>Writing</title>
+
   <style>
-    body { font-family: Arial, "Microsoft YaHei", sans-serif; margin: 24px; }
-    h1 { margin: 0 0 8px 0; }
-    .row { margin: 12px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    input[type="file"] { padding: 6px; }
-    select, button { padding: 8px 10px; }
-    button { cursor: pointer; }
-    button:disabled { cursor: not-allowed; opacity: 0.6; }
+    :root{
+      --bg-strong:#ffda6a;
+      --bg-soft:#fff7de;
+      --ink-strong:#cc7a00;
+      --ink-soft:#7e6709;
+      --bd: rgba(204,122,0,.22);
+      --card:#ffffff;
+      --panel-yellow: #fff7de;
+    }
 
-    .small { color:#666; font-size: 12px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-    .status { margin-left: 6px; }
+    *{ box-sizing:border-box; }
 
-    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
-    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
-    th { background: #f6f6f6; text-align: left; }
-    .ok { color: #0a7a0a; font-weight: 600; }
-    .bad { color: #b00020; font-weight: 600; }
-    .right { text-align: right; }
-    .nowrap { white-space: nowrap; }
+    body{
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+                  Arial, "Microsoft YaHei", sans-serif;
+      background: #ffffff;
+      color: #1f2937;
+      padding: 22px;
+    }
 
-    .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 10px; }
-    .pill { border: 1px solid #ddd; border-radius: 999px; padding: 4px 10px; background:#fafafa; }
-    pre { background:#f6f6f6; padding:12px; overflow:auto; }
+    .app{
+      max-width: 1060px;
+      margin: 0 auto;
+    }
+
+    .hero{
+      padding: 14px 16px;
+      border: none;          /* 去框线 */
+      border-radius: 0;      /* 去卡片感 */
+      background: #ffffff;  /* 和页面融在一起 */
+    }
+
+    h1{
+      margin:0 0 6px 0;
+      font-size: 26px;
+      letter-spacing: .2px;
+      color: #cc7a00;
+    }
+
+    .small{
+      color: var(--ink-soft);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .panel{
+      margin-top: 12px;
+      padding: 14px 14px;
+      border: 1px solid var(--bd);
+      border-radius: 14px;
+      background: var(--panel-yellow);
+      box-shadow: 0 10px 30px rgba(204,122,0,.10);
+    }
+  
+    .panel-head{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-bottom:10px;
+      font-weight:700;
+      color:#4a3b00; /* 或你现在 h1 用的颜色 */
+    }
+
+    .panel-head .ico,
+    .title-ico{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size:18px;
+      line-height:1;
+    }
+    
+    /* 操作区：浅黄层级（只影响第一个 panel） */
+    .panel-action{
+      border-color: rgba(204,122,0,.25);
+      box-shadow: 0 10px 30px rgba(204,122,0,.08);
+    }
+
+    /* 结果区：保持绝对白底（你已有 panel-result class） */
+    .panel-result{
+      background: var(--panel-yellow); /* 统一浅黄色 */
+    }
+
+
+    .row{
+      margin: 0;
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    input[type="file"]{
+      padding: 8px 10px;
+      border: 1px solid var(--bd);
+      border-radius: 10px;
+      background: #fff;
+      max-width: 420px;
+    }
+
+    select, button{
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--bd);
+      font-size: 14px;
+    }
+
+    button{
+      cursor:pointer;
+      background: var(--bg-strong);
+      color: var(--ink-strong);
+      font-weight: 700;
+    }
+
+    button:hover{ filter: brightness(.98); }
+    button:disabled{ cursor:not-allowed; opacity:.55; }
+
+    /* 次级按钮（全选/全不选/导出）更克制一点 */
+    #selectAll, #selectNone, #exportSelected{
+      background: #fff;
+      color: var(--ink-soft);
+      font-weight: 600;
+    }
+    #selectAll:hover, #selectNone:hover, #exportSelected:hover{
+      background: var(--bg-soft);
+    }
+
+    .status{ margin-left: 6px; }
+
+    .toolbar{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--bd);
+    }
+
+    .pill{
+      border: 1px solid var(--bd);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: var(--bg-soft);
+    }
+
+    table{
+      border-collapse: separate;
+      border-spacing: 0;
+      width: 100%;
+      margin-top: 0;
+    }
+
+    th, td{
+      border-bottom: 1px solid rgba(204,122,0,.16);
+      padding: 10px 10px;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th{
+      position: sticky;
+      top: 0;
+      background: var(--bg-soft);
+      color: var(--ink-soft);
+      text-align: left;
+      font-weight: 700;
+      border-top: 1px solid rgba(204,122,0,.16);
+    }
+
+    /* 表格圆角（只做视觉） */
+    table thead tr th:first-child{ border-top-left-radius: 10px; }
+    table thead tr th:last-child{ border-top-right-radius: 10px; }
+
+    .ok{ color: var(--ink-strong); font-weight: 800; }
+    .bad{ color: #b00020; font-weight: 800; }
+
+    .right{ text-align:right; }
+    .nowrap{ white-space:nowrap; }
+
+    pre{
+      background: var(--bg-soft);
+      border: 1px solid var(--bd);
+      border-radius: 12px;
+      padding: 12px;
+      overflow:auto;
+    }
   </style>
 </head>
+
 <body>
-  <h1>批量写作批改</h1>
-  <div class="small">
-    说明：先批改生成列表，再勾选导出所选反馈（zip）。
-  </div>
+  <div class="app">
+    <header class="hero">
+      <h1><span class="title-ico">✍️</span><span>Writing</span></h1>
+      <div class="small">
+        说明：先批改生成列表，再勾选导出所选反馈（zip）。
+      </div>
+    </header>
 
-  <div class="row">
-    <input id="files" type="file" multiple accept=".txt,.docx,.doc" />
-    <select id="taskType">
-      <option value="">自动识别 Task</option>
-      <option value="Task 1">Task 1</option>
-      <option value="Task 2">Task 2</option>
-    </select>
-    <button id="run">批量批改</button>
-    <span id="status" class="small status"></span>
-  </div>
+    <section class="panel panel-action">
+      <div class="panel-head">
+        <span class="ico">📂</span>
+        <span>上传与批改</span>
+      </div>
+      <div class="row">
+        <input id="files" type="file" multiple accept=".txt,docx,doc" />
+        <select id="taskType">
+          <option value="">自动识别 Task</option>
+          <option value="Task 1">Task 1</option>
+          <option value="Task 2">Task 2</option>
+        </select>
+        <button id="run">批量批改</button>
+        <span id="status" class="small status"></span>
+      </div>
 
-  <div class="toolbar">
-    <span class="pill small">batch_id: <span id="batchId" class="mono">-</span></span>
-    <button id="selectAll" disabled>全选</button>
-    <button id="selectNone" disabled>全不选</button>
-    <button id="exportSelected" disabled>导出所选报告（zip）</button>
-    <span id="selectedCount" class="small"></span>
-  </div>
+      <div class="toolbar">
+        <span class="pill small">batch_id: <span id="batchId" class="mono">-</span></span>
+        <button id="selectAll" disabled>全选</button>
+        <button id="selectNone" disabled>全不选</button>
+        <button id="exportSelected" disabled>导出所选报告（zip）</button>
+        <span id="selectedCount" class="small"></span>
+      </div>
+    </section>
 
-  <div id="result"></div>
+    <section class="panel panel-result">
+      <div class="panel-head">
+        <span class="ico">📄</span>
+        <span>批改结果</span>
+      </div>
+      <div id="result"></div>
+    </section>
+
+
+  </div>
 
   <script>
     const API_STAGE1 = "/writing/api/grade/files";
@@ -93,7 +282,6 @@
         return;
       }
 
-      // 只有有成功条目时才允许全选/全不选
       const hasAnySuccess = currentRows.some(r => r.ok);
       setButtonsEnabled(hasAnySuccess);
       updateSelectedCount();
@@ -151,7 +339,6 @@
         </table>
       `;
 
-      // 绑定勾选事件
       document.querySelectorAll("input.pick").forEach(cb => {
         cb.addEventListener("change", (e) => {
           const id = e.target.getAttribute("data-id");
@@ -168,7 +355,6 @@
     async function downloadZipFromResponse(resp, fallbackName="reports.zip") {
       const blob = await resp.blob();
 
-      // 尝试从 Content-Disposition 解析文件名
       let filename = fallbackName;
       const cd = resp.headers.get("content-disposition");
       if (cd) {
@@ -197,7 +383,6 @@
         return;
       }
 
-      // 清空旧状态
       currentBatchId = null;
       currentRows = [];
       selectedSet.clear();
@@ -228,7 +413,6 @@
         currentRows = data.results || [];
         batchIdEl.textContent = currentBatchId || "-";
 
-        // 默认：把成功的都选上（你也可以改成默认不选）
         selectedSet.clear();
         currentRows.filter(r => r.ok).forEach(r => selectedSet.add(r.file_id));
 
@@ -280,7 +464,6 @@
           body: JSON.stringify(payload),
         });
 
-        // 若返回 JSON 错误，先解析再提示
         const ct = resp.headers.get("content-type") || "";
         if (!resp.ok) {
           if (ct.includes("application/json")) {
@@ -300,7 +483,7 @@
         statusEl.textContent = "导出失败";
         alert(String(e));
       } finally {
-        updateSelectedCount(); // 会自动恢复按钮状态
+        updateSelectedCount();
       }
     });
   </script>
