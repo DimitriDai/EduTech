@@ -30,6 +30,13 @@ PORTAL_PATH = os.getenv("PORTAL_PATH", "gateway/static/index.html")
 BASE_DIR = Path(__file__).resolve().parent
 VOCAB_UI_DIR = BASE_DIR.parent / "vocab_service" / "frontend"
 GATEWAY_STATIC_DIR = BASE_DIR / "static"
+SPEAKING_STATIC_DIR = BASE_DIR.parent / "speaking_service" / "static"
+
+app.mount(
+    "/static",
+    StaticFiles(directory=str(SPEAKING_STATIC_DIR), html=False),
+    name="speaking-static",
+)
 
 
 # 新增：访问 http://127.0.0.1:9000/vocab-ui 打开 vocab 前端
