@@ -20,7 +20,7 @@ from modules.deepseek_client import DeepSeekClient
 
 
 # 允许的数量选项（按需求）
-ALLOWED_COUNTS = {10, 15, 20, 25, 30, 50}
+ALLOWED_COUNTS = {15, 20, 25, 30, 50, 80, 100, 150}
 
 # Debug 开关：线上默认关闭；本地需要看日志就 set VOCAB_DEBUG=1
 DEBUG = os.getenv("VOCAB_DEBUG", "0").strip() == "1"

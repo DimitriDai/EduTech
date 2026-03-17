@@ -19,7 +19,7 @@ from modules.deepseek_client import DeepSeekClient
 
 
 # 允许的数量选项（按需求）
-ALLOWED_COUNTS = {15, 20, 25, 30, 50}
+ALLOWED_COUNTS = {15, 20, 25, 30, 50, 80, 100, 150}
 
 
 @dataclass
