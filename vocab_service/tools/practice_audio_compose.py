@@ -347,6 +347,7 @@ def compose_full_mp3(
     audio_root: str,
     output_mp3: str,
     silence_cache_dir: str,
+    concat_mode: str = "reencode",
     write_manifest: bool = True,
 ) -> Tuple[int, int, Optional[str]]:
     """
@@ -442,19 +443,50 @@ def compose_full_mp3(
                     # 6️⃣ 推进 timeline（必须在最后）
                     timeline_ms += word_ms + sil_ms
 
-        # 先尝试 -c copy（速度快，要求参数一致）
-        cmd_copy = [
-            ffmpeg_bin, "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", concat_txt,
-            "-c", "copy",
-            output_mp3,
-        ]
-        p = _run(cmd_copy)
-
-        if p.returncode != 0:
-            # fallback：重编码（更稳）
+        # 默认重编码，避免不同来源 mp3 在 concat copy 模式下出现爆音/时间轴异常。
+        # 如需更快速度，可显式传 concat_mode=copy 或 auto。
+        if concat_mode == "copy":
+            cmd_copy = [
+                ffmpeg_bin, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_txt,
+                "-c", "copy",
+                output_mp3,
+            ]
+            p = _run(cmd_copy)
+            if p.returncode != 0:
+                raise RuntimeError(f"ffmpeg compose failed in copy mode.\n{p.stderr.strip()}")
+        elif concat_mode == "auto":
+            # 先尝试 copy，失败再重编码
+            cmd_copy = [
+                ffmpeg_bin, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_txt,
+                "-c", "copy",
+                output_mp3,
+            ]
+            p = _run(cmd_copy)
+            if p.returncode != 0:
+                cmd_enc = [
+                    ffmpeg_bin, "-y",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", concat_txt,
+                    "-c:a", "libmp3lame",
+                    "-q:a", "4",
+                    output_mp3,
+                ]
+                p2 = _run(cmd_enc)
+                if p2.returncode != 0:
+                    raise RuntimeError(
+                        "ffmpeg compose failed.\n"
+                        f"[copy mode err]\n{p.stderr.strip()}\n\n"
+                        f"[re-encode err]\n{p2.stderr.strip()}"
+                    )
+        else:
+            # reencode（默认）
             cmd_enc = [
                 ffmpeg_bin, "-y",
                 "-f", "concat",
@@ -466,11 +498,7 @@ def compose_full_mp3(
             ]
             p2 = _run(cmd_enc)
             if p2.returncode != 0:
-                raise RuntimeError(
-                    "ffmpeg compose failed.\n"
-                    f"[copy mode err]\n{p.stderr.strip()}\n\n"
-                    f"[re-encode err]\n{p2.stderr.strip()}"
-                )
+                raise RuntimeError(f"ffmpeg compose failed in re-encode mode.\n{p2.stderr.strip()}")
 
     manifest_path = None
     if write_manifest:
@@ -505,6 +533,12 @@ def main():
     parser.add_argument("--only_sheets", default="", help="comma-separated sheet names; empty=all")
     parser.add_argument("--silence_cache_dir", default="storage/audio_cache/_silence",
                         help="cache dir for silence mp3 segments")
+    parser.add_argument(
+        "--concat_mode",
+        default="reencode",
+        choices=["reencode", "copy", "auto"],
+        help="concat strategy: reencode(default, most stable), copy(fast but fragile), auto(copy then fallback reencode)",
+    )
     parser.add_argument("--no_manifest", action="store_true", help="do not write manifest json")
     args = parser.parse_args()
 
@@ -531,6 +565,7 @@ def main():
         audio_root=args.audio_root,
         output_mp3=args.output_mp3,
         silence_cache_dir=_abs_from_repo(args.silence_cache_dir),
+        concat_mode=args.concat_mode,
         write_manifest=(not args.no_manifest),
     )
 
