@@ -312,11 +312,11 @@ def build_vocab_note_docx(
 
         no = _safe_int(d.get("no"), default=no_default)
         word_original = _to_text(
-            d.get("word_display")
-            or d.get("word_norm")
-            or d.get("word_original")
+            d.get("word_original")
             or d.get("word")
             or d.get("英文单词")
+            or d.get("word_norm")
+            or d.get("word_display")
         )
 
         phonetic_uk = _to_text(d.get("phonetic_uk") or d.get("英式音标"))

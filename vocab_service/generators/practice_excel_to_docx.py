@@ -203,12 +203,37 @@ def _set_table_cell_margins(table: Table, top_cm=0.05, bottom_cm=0.05, left_cm=0
     _set_side("right", right_cm)
 
 
+def _get_cell_value(row_values, idx: Dict[str, int], key: str) -> Any:
+    col = idx.get(key)
+    if col is None or col >= len(row_values):
+        return None
+    return row_values[col]
+
+
+def _resolve_word_like_value(k: str, row_values, idx: Dict[str, int]) -> Any:
+    if k == "word_original":
+        return (
+            _get_cell_value(row_values, idx, "word_original")
+            or _get_cell_value(row_values, idx, "word")
+            or _get_cell_value(row_values, idx, "英文单词")
+            or _get_cell_value(row_values, idx, "word_norm")
+            or _get_cell_value(row_values, idx, "word_display")
+        )
+    if k == "word_norm":
+        return (
+            _get_cell_value(row_values, idx, "word_norm")
+            or _get_cell_value(row_values, idx, "word_original")
+            or _get_cell_value(row_values, idx, "word_display")
+        )
+    return _get_cell_value(row_values, idx, k)
+
+
 def _calc_text_for_cell(k: str, c: Dict[str, Any], row_values, idx: Dict[str, int], row_no: int) -> str:
     if k == "no":
         return str(row_no)
     if c.get("blank", False):
         return ""
-    v = row_values[idx[k]]
+    v = _resolve_word_like_value(k, row_values, idx)
     return "" if v is None else str(v)
 
 
@@ -224,12 +249,7 @@ def _build_table_double(
     字段映射完全复用 col_defs：不会写反“留空列”。
     """
     header_keys = _get_header_keys(ws)
-    idx: Dict[str, int] = {}
-    for c in col_defs:
-        if c.get("blank", False):
-            continue
-        k = c["key"]
-        idx[k] = header_keys.index(k)
+    idx: Dict[str, int] = {k: i for i, k in enumerate(header_keys) if k}
 
     # 6 列：左3 + 右3
     table = doc.add_table(rows=1, cols=len(col_defs) * 2)
@@ -362,12 +382,7 @@ def _build_one_docx_from_workbook(
             raise ValueError(f"[practice_docx] sheet={sheet} missing columns: {missing}")
 
         header_keys = _get_header_keys(ws)
-        idx: Dict[str, int] = {}
-        for c in col_defs:
-            if c.get("blank", False):
-                continue
-            k = c["key"]
-            idx[k] = header_keys.index(k)
+        idx: Dict[str, int] = {k: i for i, k in enumerate(header_keys) if k}
 
         if layout == "double":
             # ✅ 双栏：col_widths_cm 必须是 6 列宽
@@ -380,14 +395,6 @@ def _build_one_docx_from_workbook(
             )
         else:
             # ✅ 单栏：保留你原逻辑（仅加一个 cell margins，让行高更贴近 1.0cm）
-            header_keys = _get_header_keys(ws)
-            idx: Dict[str, int] = {}
-            for c in col_defs:
-                if c.get("blank", False):
-                    continue
-                k = c["key"]
-                idx[k] = header_keys.index(k)
-
             table = doc.add_table(rows=1, cols=len(col_defs))
             _apply_column_widths(table, col_widths_cm)
             _set_table_cell_margins(table, top_cm=0.05, bottom_cm=0.05, left_cm=0.05, right_cm=0.05)
@@ -407,13 +414,7 @@ def _build_one_docx_from_workbook(
                 cells = row.cells
                 for j, c in enumerate(col_defs):
                     k = c["key"]
-                    if k == "no":
-                        text = str(row_no)
-                    elif c.get("blank"):
-                        text = ""
-                    else:
-                        v = r[idx[k]]
-                        text = "" if v is None else str(v)
+                    text = _calc_text_for_cell(k, c, r, idx, row_no)
 
                     _set_cell_text(cells[j], text, size_pt=FONT_SIZE, bold=False)
                     _set_cell_width(cells[j], col_widths_cm[j])

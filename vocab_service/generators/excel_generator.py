@@ -168,13 +168,20 @@ def _write_rows(ws: Worksheet, entries: Sequence[EntryLike], col_keys: Sequence[
                 else:
                     row.append("")
             else:
-                # 英文单词列：无论底层 key 是 word_original 还是 word_norm
-                # 都优先展示 word_display
-                if k in ("word_original", "word_norm"):
+                # 英文单词列改为优先使用原始输入：
+                # - word_original 列：优先 word_original，再兜底 word_norm / word_display
+                # - word_norm 列：优先 word_norm，再兜底 word_original / word_display
+                if k == "word_original":
                     v = (
-                        _get_entry_value(e, "word_display")
+                        _get_entry_value(e, "word_original")
                         or _get_entry_value(e, "word_norm")
+                        or _get_entry_value(e, "word_display")
+                    )
+                elif k == "word_norm":
+                    v = (
+                        _get_entry_value(e, "word_norm")
                         or _get_entry_value(e, "word_original")
+                        or _get_entry_value(e, "word_display")
                     )
                 else:
                     v = _get_entry_value(e, k)
